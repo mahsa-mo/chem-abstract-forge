@@ -78,20 +78,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "ChemAbstract — Graphical Abstract Generator" },
+      { title: "ChemAbstract — Graphical Abstract Generator for Chemistry" },
       {
         name: "description",
         content:
-          "Generate publication-style graphical abstracts from chemistry paper text or reaction descriptions.",
+          "Generate a publication-style graphical abstract from your chemistry paper text or reaction description. English & Persian.",
       },
-      { property: "og:title", content: "ChemAbstract — Graphical Abstract Generator" },
+      { property: "og:title", content: "ChemAbstract — Graphical Abstract Generator for Chemistry" },
       {
         property: "og:description",
-        content: "Turn a paper excerpt or reaction description into a scientific graphical abstract.",
+        content: "Generate a publication-style graphical abstract from your chemistry paper text or reaction description. English & Persian.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "ChemAbstract — Graphical Abstract Generator for Chemistry" },
+      { name: "twitter:description", content: "Generate a publication-style graphical abstract from your chemistry paper text or reaction description. English & Persian." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/638bc0673691f4d258f44a79f0ac5a05/id-preview-21fc1c48--9f752915-31bf-4578-82ba-a8f7cc6fda39.lovable.app-1786799882984.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/638bc0673691f4d258f44a79f0ac5a05/id-preview-21fc1c48--9f752915-31bf-4578-82ba-a8f7cc6fda39.lovable.app-1786799882984.png" },
     ],
     links: [
       {

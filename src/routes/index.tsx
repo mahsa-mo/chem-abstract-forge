@@ -15,11 +15,11 @@ export const Route = createFileRoute("/")({
         content:
           "Generate a publication-style graphical abstract from your chemistry paper text or reaction description. English & Persian.",
       },
-      { property: "og:title", content: "ChemAbstract — Graphical Abstract Generator" },
+      { property: "og:title", content: "ChemAbstract — Graphical Abstract Generator for Chemistry" },
       {
         property: "og:description",
         content:
-          "Paste a paper excerpt or reaction description and get a clean scientific graphical abstract in seconds.",
+          "Generate a publication-style graphical abstract from your chemistry paper text or reaction description. English & Persian.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

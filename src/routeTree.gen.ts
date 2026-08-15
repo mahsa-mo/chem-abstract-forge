@@ -10,11 +10,23 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as ApiGenerateAbstractRouteImport } from './routes/api/generate-abstract'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiGenerateAbstractRoute = ApiGenerateAbstractRouteImport.update({
@@ -25,27 +37,35 @@ const ApiGenerateAbstractRoute = ApiGenerateAbstractRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/pricing': typeof PricingRoute
   '/api/generate-abstract': typeof ApiGenerateAbstractRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/pricing': typeof PricingRoute
   '/api/generate-abstract': typeof ApiGenerateAbstractRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/pricing': typeof PricingRoute
   '/api/generate-abstract': typeof ApiGenerateAbstractRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/generate-abstract'
+  fullPaths: '/' | '/auth' | '/pricing' | '/api/generate-abstract'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/generate-abstract'
-  id: '__root__' | '/' | '/api/generate-abstract'
+  to: '/' | '/auth' | '/pricing' | '/api/generate-abstract'
+  id: '__root__' | '/' | '/auth' | '/pricing' | '/api/generate-abstract'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
+  PricingRoute: typeof PricingRoute
   ApiGenerateAbstractRoute: typeof ApiGenerateAbstractRoute
 }
 
@@ -56,6 +76,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/generate-abstract': {
@@ -70,6 +104,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
+  PricingRoute: PricingRoute,
   ApiGenerateAbstractRoute: ApiGenerateAbstractRoute,
 }
 export const routeTree = rootRouteImport

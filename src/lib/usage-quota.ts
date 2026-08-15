@@ -1,8 +1,13 @@
 /**
- * Per-session daily free usage limit. Isolated so it can be swapped for a
- * server/database-backed counter later without touching the UI.
+ * Daily free usage limits. Guests are tracked per browser session/day;
+ * signed-in users are tracked by their saved abstracts for the current day.
+ * Isolated so the counter can be swapped for another backend later.
  */
-export const DAILY_LIMIT = 5;
+export const GUEST_LIMIT = 2;
+export const FREE_LIMIT = 3;
+
+/** Legacy alias kept for compatibility. */
+export const DAILY_LIMIT = FREE_LIMIT;
 
 const KEY = "chemabstract.usage";
 
@@ -10,7 +15,7 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function getUsedToday(): number {
+export function getGuestUsedToday(): number {
   if (typeof window === "undefined") return 0;
   try {
     const raw = window.localStorage.getItem(KEY);
@@ -22,8 +27,8 @@ export function getUsedToday(): number {
   }
 }
 
-export function recordUse(): number {
-  const next = getUsedToday() + 1;
+export function recordGuestUse(): number {
+  const next = getGuestUsedToday() + 1;
   try {
     window.localStorage.setItem(KEY, JSON.stringify({ date: today(), count: next }));
   } catch {
@@ -32,6 +37,8 @@ export function recordUse(): number {
   return next;
 }
 
-export function remainingToday(): number {
-  return Math.max(0, DAILY_LIMIT - getUsedToday());
+export function startOfTodayISO(): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
 }

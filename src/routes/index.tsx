@@ -73,7 +73,7 @@ function LoadingState() {
         </span>
       </div>
       <p key={i} className="animate-in fade-in text-sm text-muted-foreground">
-        {t(messages[i])}
+        {t(messages[i] ?? "loading.1")}
       </p>
       <div className="h-1 w-40 overflow-hidden rounded-full bg-muted">
         <div className="h-full w-1/3 animate-[shimmer_1.6s_ease-in-out_infinite] rounded-full bg-accent-strong" />

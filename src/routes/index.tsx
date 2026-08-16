@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Download, FlaskConical, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppHeader } from "@/components/AppHeader";
+import { MolecularBackground } from "@/components/MolecularBackground";
 import { useI18n } from "@/lib/i18n";
 import { streamAbstract } from "@/lib/streamImage";
 import { useAuth } from "@/lib/auth";
@@ -133,7 +134,8 @@ function Index() {
   }
 
   return (
-    <div className="molecular-bg min-h-screen bg-background font-sans" dir={dir}>
+    <div className="relative min-h-screen bg-background font-sans" dir={dir}>
+      <MolecularBackground />
       <AppHeader />
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">

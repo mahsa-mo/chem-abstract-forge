@@ -134,7 +134,7 @@ function Index() {
   }
 
   return (
-    <div className="relative min-h-screen bg-background font-sans" dir={dir}>
+    <div className="relative min-h-screen font-sans" dir={dir}>
       <MolecularBackground />
       <AppHeader />
 

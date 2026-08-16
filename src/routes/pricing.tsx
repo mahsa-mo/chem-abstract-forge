@@ -1,3 +1,4 @@
+import { MolecularBackground } from "@/components/MolecularBackground";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,8 @@ function PricingPage() {
   const { user } = useAuth();
 
   return (
-    <div className="molecular-bg min-h-screen bg-background font-sans" dir={dir}>
+    <div className="relative min-h-screen font-sans" dir={dir}>
+      <MolecularBackground />
       <AppHeader />
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t("pricing.title")}</h1>

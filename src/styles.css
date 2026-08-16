@@ -184,6 +184,49 @@
   background-attachment: fixed;
 }
 
+/* Slow drifting motion for the molecular network layer. */
+.molecular-drift {
+  animation: molecular-drift 38s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes molecular-drift {
+  0% {
+    transform: translate3d(-1.5%, -1%, 0) scale(1.02);
+  }
+  50% {
+    transform: translate3d(1.5%, 1.5%, 0) scale(1.05);
+  }
+  100% {
+    transform: translate3d(-1%, 2%, 0) scale(1.02);
+  }
+}
+
+.molecular-node {
+  animation: molecular-pulse 9s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes molecular-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .molecular-drift,
+  .molecular-node {
+    animation: none;
+  }
+}
+
 .bubble {
   position: absolute;
   bottom: 0;

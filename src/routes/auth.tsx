@@ -1,3 +1,4 @@
+import { MolecularBackground } from "@/components/MolecularBackground";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
@@ -67,7 +68,8 @@ function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background font-sans molecular-bg" dir={dir}>
+    <div className="relative min-h-screen font-sans" dir={dir}>
+      <MolecularBackground />
       <AppHeader />
       <main className="mx-auto max-w-md px-4 py-10 sm:px-6">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Download, FlaskConical, Sparkles, X } from "lucide-react";
+import { Download, ExternalLink, FlaskConical, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppHeader } from "@/components/AppHeader";
 import { MolecularBackground } from "@/components/MolecularBackground";
@@ -133,6 +133,20 @@ function Index() {
     a.click();
   }
 
+  /**
+   * The image model returns raster PNG data only (no vector source), so the
+   * "editable" affordance is opening the full-resolution image in a new tab.
+   */
+  function handleOpenFullRes() {
+    if (!image) return;
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(
+      `<title>graphical-abstract</title><body style="margin:0;background:#111"><img src="${image}" style="max-width:100%;height:auto;display:block;margin:auto" /></body>`,
+    );
+    win.document.close();
+  }
+
   return (
     <div className="relative min-h-screen font-sans" dir={dir}>
       <MolecularBackground />
@@ -229,9 +243,13 @@ function Index() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-foreground">{t("output.title")}</h2>
               {image && isFinal && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={handleGenerate} disabled={loading}>
                     {t("output.regenerate")}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleOpenFullRes}>
+                    <ExternalLink className="size-4" aria-hidden />
+                    {t("output.fullRes")}
                   </Button>
                   <Button size="sm" onClick={handleDownload}>
                     <Download className="size-4" aria-hidden />

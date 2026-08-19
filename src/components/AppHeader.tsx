@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronDown, Languages, LogOut, Mail, Sparkles } from "lucide-react";
+import { ChevronDown, Languages, LogIn, LogOut, Mail, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -174,7 +174,7 @@ function AccountMenu() {
 
 export function AppHeader() {
   const { t } = useI18n();
-  const { user, loading } = useAuth();
+  const { user, loading, signInWithGoogle } = useAuth();
 
   return (
     <header className="bg-header text-primary-foreground">
@@ -197,28 +197,31 @@ export function AppHeader() {
             {t("nav.pricing")}
           </Link>
           <LanguageSwitcher />
-          {!loading &&
-            (user ? (
-              <AccountMenu />
-            ) : (
-              <span className="flex items-center gap-2">
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="sm"
-                  className="text-primary-foreground hover:bg-white/10 hover:text-primary-foreground"
-                >
-                  <Link to="/auth" search={{ mode: "signin" }}>
-                    {t("auth.signIn")}
-                  </Link>
-                </Button>
-                <Button asChild size="sm" variant="secondary">
-                  <Link to="/auth" search={{ mode: "signup" }}>
-                    {t("auth.signUp")}
-                  </Link>
-                </Button>
-              </span>
-            ))}
+          {user && !loading ? (
+            <AccountMenu />
+          ) : (
+            <span className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => void signInWithGoogle()}
+                className="gap-1.5"
+              >
+                <LogIn className="size-4" aria-hidden />
+                {t("auth.signIn")}
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="hidden text-primary-foreground hover:bg-white/10 hover:text-primary-foreground sm:inline-flex"
+              >
+                <Link to="/auth" search={{ mode: "signup" }}>
+                  {t("auth.signUp")}
+                </Link>
+              </Button>
+            </span>
+          )}
         </nav>
       </div>
     </header>

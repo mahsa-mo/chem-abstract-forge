@@ -3,7 +3,7 @@
  * signed-in users are tracked by their saved abstracts for the current day.
  * Isolated so the counter can be swapped for another backend later.
  */
-export const GUEST_LIMIT = 2;
+export const GUEST_LIMIT = 3;
 export const FREE_LIMIT = 3;
 
 /** Legacy alias kept for compatibility. */

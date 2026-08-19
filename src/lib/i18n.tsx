@@ -44,6 +44,7 @@ const dictionaries: Record<Locale, Dict> = {
     "output.title": "Graphical abstract",
     "output.empty": "Your generated abstract will appear here.",
     "output.download": "Download PNG",
+    "output.fullRes": "Open full resolution",
     "output.regenerate": "Regenerate",
     "beta.title": "Beta release",
     "beta.body":
@@ -125,6 +126,7 @@ const dictionaries: Record<Locale, Dict> = {
     "output.title": "چکیده تصویری",
     "output.empty": "تصویر ساخته‌شده اینجا نمایش داده می‌شود.",
     "output.download": "دانلود PNG",
+    "output.fullRes": "نمایش با کیفیت کامل",
     "output.regenerate": "ساخت مجدد",
     "beta.title": "نسخه بتا",
     "beta.body":

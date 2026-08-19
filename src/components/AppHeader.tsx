@@ -174,7 +174,7 @@ function AccountMenu() {
 
 export function AppHeader() {
   const { t } = useI18n();
-  const { user, loading } = useAuth();
+  const { user, loading, signInWithGoogle } = useAuth();
 
   return (
     <header className="bg-header text-primary-foreground">

@@ -243,9 +243,13 @@ function Index() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-foreground">{t("output.title")}</h2>
               {image && isFinal && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={handleGenerate} disabled={loading}>
                     {t("output.regenerate")}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleOpenFullRes}>
+                    <ExternalLink className="size-4" aria-hidden />
+                    {t("output.fullRes")}
                   </Button>
                   <Button size="sm" onClick={handleDownload}>
                     <Download className="size-4" aria-hidden />

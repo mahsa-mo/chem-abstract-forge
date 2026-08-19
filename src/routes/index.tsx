@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Download, FlaskConical, Sparkles, X } from "lucide-react";
+import { Download, ExternalLink, FlaskConical, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppHeader } from "@/components/AppHeader";
 import { MolecularBackground } from "@/components/MolecularBackground";
@@ -131,6 +131,20 @@ function Index() {
     a.href = image;
     a.download = "graphical-abstract.png";
     a.click();
+  }
+
+  /**
+   * The image model returns raster PNG data only (no vector source), so the
+   * "editable" affordance is opening the full-resolution image in a new tab.
+   */
+  function handleOpenFullRes() {
+    if (!image) return;
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(
+      `<title>graphical-abstract</title><body style="margin:0;background:#111"><img src="${image}" style="max-width:100%;height:auto;display:block;margin:auto" /></body>`,
+    );
+    win.document.close();
   }
 
   return (

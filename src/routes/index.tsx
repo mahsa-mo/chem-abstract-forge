@@ -10,6 +10,13 @@ import { useAuth } from "@/lib/auth";
 import { useUsage } from "@/lib/use-usage";
 import { FREE_LIMIT } from "@/lib/usage-quota";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  REGEN_LIMIT,
+  countRegenerations,
+  createGeneration,
+  isRegenLimitError,
+  loadLatestOriginal,
+} from "@/lib/generations";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -291,7 +298,7 @@ function Index() {
               <Button
                 size="lg"
                 onClick={handleGenerate}
-                disabled={loading || quotaReached}
+                disabled={busy || quotaReached}
                 className="w-full sm:w-auto"
               >
                 <Sparkles className="size-4" aria-hidden />
@@ -331,10 +338,18 @@ function Index() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-foreground">{t("output.title")}</h2>
               {image && isFinal && (
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={handleGenerate} disabled={loading}>
-                    {t("output.regenerate")}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRegenerate}
+                    disabled={busy || regenExhausted}
+                  >
+                    {regenerating ? t("generating") : t("output.regenerate")}
                   </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {regenExhausted ? t("regen.exhausted") : t("regen.left", { n: regenRemaining })}
+                  </span>
                   <Button variant="outline" size="sm" onClick={handleOpenFullRes}>
                     <ExternalLink className="size-4" aria-hidden />
                     {t("output.fullRes")}

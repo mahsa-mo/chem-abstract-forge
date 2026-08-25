@@ -10,6 +10,13 @@ import { useAuth } from "@/lib/auth";
 import { useUsage } from "@/lib/use-usage";
 import { FREE_LIMIT } from "@/lib/usage-quota";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  REGEN_LIMIT,
+  countRegenerations,
+  createGeneration,
+  isRegenLimitError,
+  loadLatestOriginal,
+} from "@/lib/generations";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -60,6 +67,7 @@ function LoadingState() {
   );
 }
 
+/** Daily-quota bookkeeping row — unchanged, originals only. */
 async function saveAbstract(userId: string, dataUrl: string, text: string) {
   const blob = await (await fetch(dataUrl)).blob();
   const path = `${userId}/${Date.now()}.png`;
@@ -82,14 +90,44 @@ function Index() {
   const [image, setImage] = useState<string | null>(null);
   const [isFinal, setIsFinal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBanner, setShowBanner] = useState(true);
+  const [generationId, setGenerationId] = useState<string | null>(null);
+  const [regenUsed, setRegenUsed] = useState(0);
   const outputRef = useRef<HTMLDivElement>(null);
 
   const quotaReached = remaining <= 0;
   const guestBlocked = isGuest && quotaReached;
+  const regenRemaining = Math.max(0, REGEN_LIMIT - regenUsed);
+  const regenExhausted = regenRemaining <= 0;
+  const busy = loading || regenerating;
+
+  // Restore the latest original and its regeneration count after a refresh.
+  useEffect(() => {
+    if (!user) {
+      setGenerationId(null);
+      setRegenUsed(0);
+      return;
+    }
+    let active = true;
+    void loadLatestOriginal(user.id).then((res) => {
+      if (!active || !res) return;
+      setGenerationId(res.generation.id);
+      setRegenUsed(res.regenUsed);
+      setText((prev) => prev || (res.generation.source_text ?? ""));
+      if (res.imageUrl) {
+        setImage(res.imageUrl);
+        setIsFinal(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   async function handleGenerate() {
+    if (busy) return;
     setError(null);
     if (text.trim().length < 40) {
       setError(t("error.tooShort"));
@@ -106,6 +144,8 @@ function Index() {
     setLoading(true);
     setImage(null);
     setIsFinal(false);
+    setGenerationId(null);
+    setRegenUsed(0);
     outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     let finalImage: string | null = null;
     try {
@@ -116,12 +156,67 @@ function Index() {
           setIsFinal(true);
         }
       });
-      if (user && finalImage) await saveAbstract(user.id, finalImage, text);
+      if (user && finalImage) {
+        await saveAbstract(user.id, finalImage, text);
+        const row = await createGeneration({ userId: user.id, dataUrl: finalImage, text });
+        setGenerationId(row.id);
+        setRegenUsed(0);
+      }
       await record();
     } catch {
       setError(t("error.failed"));
     } finally {
       setLoading(false);
+    }
+  }
+
+  /**
+   * Regenerate is independent of the daily quota: it never calls record() and
+   * never writes an `abstracts` row. The 3-attempt limit is enforced by the
+   * `create_generation` database function; UI state is only a mirror of it.
+   */
+  async function handleRegenerate() {
+    if (busy || regenExhausted) return;
+    setError(null);
+    setRegenerating(true);
+    setIsFinal(false);
+    let finalImage: string | null = null;
+    try {
+      await streamAbstract(text, (dataUrl, final) => {
+        setImage(dataUrl);
+        if (final) {
+          finalImage = dataUrl;
+          setIsFinal(true);
+        }
+      });
+      if (!finalImage) throw new Error("no_image");
+      if (user && generationId) {
+        try {
+          await createGeneration({
+            userId: user.id,
+            dataUrl: finalImage,
+            text,
+            parentId: generationId,
+          });
+          setRegenUsed(await countRegenerations(generationId));
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "";
+          if (isRegenLimitError(msg)) {
+            setRegenUsed(REGEN_LIMIT);
+            setError(t("regen.exhausted"));
+          } else {
+            throw e;
+          }
+        }
+      } else {
+        // Guests have no server-side identity, so their count is local only.
+        setRegenUsed((n) => n + 1);
+      }
+    } catch {
+      setIsFinal(true);
+      setError(t("error.failed"));
+    } finally {
+      setRegenerating(false);
     }
   }
 
@@ -203,7 +298,7 @@ function Index() {
               <Button
                 size="lg"
                 onClick={handleGenerate}
-                disabled={loading || quotaReached}
+                disabled={busy || quotaReached}
                 className="w-full sm:w-auto"
               >
                 <Sparkles className="size-4" aria-hidden />
@@ -243,10 +338,18 @@ function Index() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-foreground">{t("output.title")}</h2>
               {image && isFinal && (
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={handleGenerate} disabled={loading}>
-                    {t("output.regenerate")}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRegenerate}
+                    disabled={busy || regenExhausted}
+                  >
+                    {regenerating ? t("generating") : t("output.regenerate")}
                   </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {regenExhausted ? t("regen.exhausted") : t("regen.left", { n: regenRemaining })}
+                  </span>
                   <Button variant="outline" size="sm" onClick={handleOpenFullRes}>
                     <ExternalLink className="size-4" aria-hidden />
                     {t("output.fullRes")}

@@ -41,6 +41,47 @@ export type Database = {
         }
         Relationships: []
       }
+      generations: {
+        Row: {
+          created_at: string
+          id: string
+          image_path: string | null
+          parent_generation_id: string | null
+          source_text: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          parent_generation_id?: string | null
+          source_text?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          parent_generation_id?: string | null
+          source_text?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generations_parent_generation_id_fkey"
+            columns: ["parent_generation_id"]
+            isOneToOne: false
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -73,7 +114,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_generation: {
+        Args: {
+          p_image_path?: string
+          p_parent_generation_id?: string
+          p_source_text?: string
+          p_title: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          image_path: string | null
+          parent_generation_id: string | null
+          source_text: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "generations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never

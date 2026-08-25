@@ -46,6 +46,9 @@ const dictionaries: Record<Locale, Dict> = {
     "output.download": "Download PNG",
     "output.fullRes": "Open full resolution",
     "output.regenerate": "Regenerate",
+    "regen.left": "{n} free regenerations left",
+    "regen.exhausted": "You've used your 3 free regenerations for this image.",
+    "regen.guestNote": "Sign in to keep every version of your image in your history.",
     "beta.title": "Beta release",
     "beta.body":
       "This is an early version. Structures are illustrative and not chemically validated — always review before publication. We would love your feedback.",
@@ -128,6 +131,9 @@ const dictionaries: Record<Locale, Dict> = {
     "output.download": "دانلود PNG",
     "output.fullRes": "نمایش با کیفیت کامل",
     "output.regenerate": "ساخت مجدد",
+    "regen.left": "{n} ساخت مجدد رایگان باقی مانده است",
+    "regen.exhausted": "شما ۳ ساخت مجدد رایگان این تصویر را استفاده کرده‌اید.",
+    "regen.guestNote": "برای نگه‌داشتن همه نسخه‌ها در تاریخچه، وارد حساب خود شوید.",
     "beta.title": "نسخه بتا",
     "beta.body":
       "این یک نسخه اولیه است. ساختارها جنبه نمایشی دارند و از نظر شیمیایی اعتبارسنجی نشده‌اند — پیش از انتشار بازبینی کنید. از بازخورد شما خوشحال می‌شویم.",

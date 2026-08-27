@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { buildAbstractPrompt } from "@/lib/abstract-prompt";
+import { generateAbstractImage, ProviderError } from "@/lib/image-provider";
 
 /**
  * Swappable image-generation endpoint.
- * The AI provider lives only inside this handler — change the fetch below to
- * point at a different service without touching any UI code.
+ * The AI provider itself lives in `src/lib/image-provider.ts` — this route
+ * only builds the prompt, calls that provider, and shapes the response into
+ * the exact contract the frontend (`src/lib/streamImage.ts`) already expects.
+ * Nothing in the frontend needs to change when the provider changes.
  */
 export const Route = createFileRoute("/api/generate-abstract")({
   server: {
@@ -22,31 +25,40 @@ export const Route = createFileRoute("/api/generate-abstract")({
           });
         }
 
-        const key = process.env["LOVABLE_API_KEY"];
-        if (!key) return new Response("Missing API key", { status: 500 });
-
-        const upstream = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "google/gemini-3.1-flash-image",
-            messages: [{ role: "user", content: buildAbstractPrompt(text.slice(0, 4000)) }],
-            modalities: ["image", "text"],
-            ...(stream ? { stream: true } : {}),
-          }),
-        });
-
-        if (!upstream.ok || !upstream.body) {
-          return new Response(await upstream.text(), { status: upstream.status });
+        let image: { b64_json: string };
+        try {
+          image = await generateAbstractImage(buildAbstractPrompt(text.slice(0, 4000)));
+        } catch (err) {
+          const status = err instanceof ProviderError ? err.status : 500;
+          const message = err instanceof Error ? err.message : "Image generation failed";
+          return new Response(message, { status });
         }
 
         if (!stream) {
-          return new Response(upstream.body, {
+          return new Response(JSON.stringify({ data: [{ b64_json: image.b64_json }] }), {
             headers: { "Content-Type": "application/json" },
           });
         }
 
-        return new Response(upstream.body, {
+        // Emit a single "completed" SSE event — Gemini returns the finished
+        // image in one shot, so there are no incremental "partial_image"
+        // frames to forward. The frontend already treats a lone completed
+        // event as a valid, successful stream (see streamImage.ts).
+        const encoder = new TextEncoder();
+        const body = new ReadableStream({
+          start(controller) {
+            const payload = JSON.stringify({
+              type: "image_generation.completed",
+              b64_json: image.b64_json,
+            });
+            controller.enqueue(
+              encoder.encode(`event: image_generation.completed\ndata: ${payload}\n\n`),
+            );
+            controller.close();
+          },
+        });
+
+        return new Response(body, {
           headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
         });
       },

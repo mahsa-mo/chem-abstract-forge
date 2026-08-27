@@ -39,7 +39,7 @@ function AuthPage() {
   const { mode } = Route.useSearch();
   const { t, dir } = useI18n();
   const navigate = useNavigate();
-  const { user, signIn, signUp, signInWithGoogle } = useAuth();
+  const { user, signIn, signUp, signInWithGoogle, isAnonymous, linkWithGoogle, convertToPermanent } = useAuth();
   const isSignUp = mode === "signup";
 
   const [name, setName] = useState("");
@@ -58,6 +58,16 @@ function AuthPage() {
     setError(null);
     setNotice(null);
     setBusy(true);
+    if (isSignUp && isAnonymous) {
+      const res = await convertToPermanent(email, password, name);
+      setBusy(false);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      setNotice(t("auth.checkEmail"));
+      return;
+    }
     const res = isSignUp ? await signUp(email, password, name) : await signIn(email, password);
     setBusy(false);
     if (res.error) {
@@ -132,6 +142,11 @@ function AuthPage() {
             variant="outline"
             className="w-full"
             onClick={async () => {
+              if (isAnonymous) {
+                const res = await linkWithGoogle();
+                if (res.error) setError(res.error);
+                return;
+              }
               const res = await signInWithGoogle();
               if (res.error) setError(res.error);
             }}

@@ -1,23 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import {
-  FREE_LIMIT,
-  GUEST_LIMIT,
-  getGuestUsedToday,
-  recordGuestUse,
-  startOfTodayISO,
-} from "@/lib/usage-quota";
+import { FREE_LIMIT, startOfTodayISO } from "@/lib/usage-quota";
 
 export function useUsage() {
   const { user } = useAuth();
   const [used, setUsed] = useState(0);
-  const isGuest = !user;
-  const limit = isGuest ? GUEST_LIMIT : FREE_LIMIT;
+  const isGuest = !user || user.is_anonymous;
 
   const refresh = useCallback(async () => {
     if (!user) {
-      setUsed(getGuestUsedToday());
+      setUsed(0);
       return;
     }
     const { count } = await supabase
@@ -33,18 +26,14 @@ export function useUsage() {
   }, [refresh]);
 
   const record = useCallback(async () => {
-    if (!user) {
-      setUsed(recordGuestUse());
-      return;
-    }
     await refresh();
-  }, [user, refresh]);
+  }, [refresh]);
 
   return {
     isGuest,
     used,
-    limit,
-    remaining: Math.max(0, limit - used),
+    limit: FREE_LIMIT,
+    remaining: Math.max(0, FREE_LIMIT - used),
     refresh,
     record,
   };

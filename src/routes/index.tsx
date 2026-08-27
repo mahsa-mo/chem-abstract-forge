@@ -8,7 +8,6 @@ import { useI18n } from "@/lib/i18n";
 import { streamAbstract } from "@/lib/streamImage";
 import { useAuth } from "@/lib/auth";
 import { useUsage } from "@/lib/use-usage";
-import { FREE_LIMIT } from "@/lib/usage-quota";
 import { supabase } from "@/integrations/supabase/client";
 import {
   REGEN_LIMIT,
@@ -84,7 +83,7 @@ async function saveAbstract(userId: string, dataUrl: string, text: string) {
 
 function Index() {
   const { t, dir } = useI18n();
-  const { user } = useAuth();
+  const { user, loading: authLoading, sessionError, retrySession } = useAuth();
   const { isGuest, used, limit, remaining, record } = useUsage();
   const [text, setText] = useState("");
   const [image, setImage] = useState<string | null>(null);
@@ -102,6 +101,7 @@ function Index() {
   const regenRemaining = Math.max(0, REGEN_LIMIT - regenUsed);
   const regenExhausted = regenRemaining <= 0;
   const busy = loading || regenerating;
+  const noSession = authLoading || !!sessionError;
 
   // Restore the latest original and its regeneration count after a refresh.
   useEffect(() => {
@@ -127,18 +127,14 @@ function Index() {
   }, [user]);
 
   async function handleGenerate() {
-    if (busy) return;
+    if (busy || noSession) return;
     setError(null);
     if (text.trim().length < 40) {
       setError(t("error.tooShort"));
       return;
     }
     if (quotaReached) {
-      setError(
-        isGuest
-          ? t("quota.guestReached", { max: limit, free: FREE_LIMIT })
-          : t("quota.reached", { max: limit }),
-      );
+      setError(t("quota.reached", { max: limit }));
       return;
     }
     setLoading(true);
@@ -176,7 +172,7 @@ function Index() {
    * `create_generation` database function; UI state is only a mirror of it.
    */
   async function handleRegenerate() {
-    if (busy || regenExhausted) return;
+    if (busy || regenExhausted || noSession) return;
     setError(null);
     setRegenerating(true);
     setIsFinal(false);
@@ -208,9 +204,6 @@ function Index() {
             throw e;
           }
         }
-      } else {
-        // Guests have no server-side identity, so their count is local only.
-        setRegenUsed((n) => n + 1);
       }
     } catch {
       setIsFinal(true);
@@ -298,7 +291,7 @@ function Index() {
               <Button
                 size="lg"
                 onClick={handleGenerate}
-                disabled={busy || quotaReached}
+                disabled={busy || quotaReached || noSession}
                 className="w-full sm:w-auto"
               >
                 <Sparkles className="size-4" aria-hidden />
@@ -306,9 +299,7 @@ function Index() {
               </Button>
               <span className="text-xs text-muted-foreground">
                 {quotaReached
-                  ? isGuest
-                    ? t("quota.guestReached", { max: limit, free: FREE_LIMIT })
-                    : t("quota.reached", { max: limit })
+                  ? t("quota.reached", { max: limit })
                   : t("quota.remaining", { n: remaining, max: limit })}
               </span>
             </div>
@@ -319,6 +310,20 @@ function Index() {
                   {t("quota.signUpCta")}
                 </Link>
               </Button>
+            )}
+
+            {sessionError && (
+              <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-3 text-sm text-destructive">
+                <p>{t("session.error")}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => void retrySession()}
+                >
+                  {t("session.retry")}
+                </Button>
+              </div>
             )}
 
             {error && (

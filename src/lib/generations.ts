@@ -40,8 +40,8 @@ export async function createGeneration(opts: {
   const { data, error } = await supabase.rpc("create_generation", {
     p_title: opts.text.trim().slice(0, 70),
     p_source_text: opts.text.trim().slice(0, 4000),
-    p_image_path: imagePath,
-    p_parent_generation_id: opts.parentId ?? null,
+    p_image_path: imagePath ?? undefined,
+    p_parent_generation_id: opts.parentId ?? undefined,
   });
   if (error) throw new Error(error.message);
   return data as unknown as GenerationRow;

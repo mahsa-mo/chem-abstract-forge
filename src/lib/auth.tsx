@@ -113,33 +113,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  const bootstrap = useCallback(async () => {
+    const envError = validateEnv();
+    if (envError) {
+      if (mountedRef.current) {
+        setSessionError(envError);
+        setLoading(false);
+      }
+      return false;
+    }
+    if (mountedRef.current) {
+      setSessionError(null);
+      setLoading(true);
+    }
+    const ok = await ensureAnonymousSession((msg) => {
+      if (mountedRef.current) setSessionError(msg);
+    });
+    if (mountedRef.current) setLoading(false);
+    return ok;
+  }, []);
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      if (!mounted) return;
+      if (!mountedRef.current) return;
       setSession(s);
       if (s) {
         setSessionError(null);
         setLoading(false);
       } else if (event === "SIGNED_OUT") {
         // After sign-out, bootstrap a fresh anonymous session.
-        setSessionError(null);
-        setLoading(true);
-        void ensureAnonymousSession((msg) => {
-          if (!mounted) return;
-          setSessionError(msg);
-          setLoading(false);
-        });
+        void bootstrap();
       }
       // For INITIAL_SESSION with null, don't set loading=false —
       // the mount effect's getSession + anonymous bootstrap handles it.
     });
 
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
+      const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+      if (!mountedRef.current) return;
 
       if (data.session) {
         setSession(data.session);
@@ -147,20 +162,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // No existing session — bootstrap an anonymous one silently.
-      void ensureAnonymousSession((msg) => {
-        if (!mounted) return;
-        setSessionError(msg);
-        setLoading(false);
-      });
-      // On success, onAuthStateChange fires SIGNED_IN and sets loading=false.
+      // No existing session — bootstrap an anonymous one silently (with retries).
+      void bootstrap();
     })();
 
+    // Recover automatically when the browser regains connectivity.
+    const onOnline = () => {
+      if (!mountedRef.current) return;
+      if (!session && !anonSignInInFlight) void bootstrap();
+    };
+    if (typeof window !== "undefined") window.addEventListener("online", onOnline);
+
     return () => {
-      mounted = false;
+      mountedRef.current = false;
+      if (typeof window !== "undefined") window.removeEventListener("online", onOnline);
       sub.subscription.unsubscribe();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootstrap]);
+
 
   const userId = session?.user.id;
 

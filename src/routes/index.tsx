@@ -291,12 +291,13 @@ function Index() {
               <Button
                 size="lg"
                 onClick={handleGenerate}
-                disabled={busy || quotaReached || noSession}
+                disabled={busy || quotaReached}
                 className="w-full sm:w-auto"
               >
                 <Sparkles className="size-4" aria-hidden />
                 {loading ? t("generating") : t("generate")}
               </Button>
+
               <span className="text-xs text-muted-foreground">
                 {quotaReached
                   ? t("quota.reached", { max: limit })

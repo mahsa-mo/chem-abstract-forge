@@ -320,12 +320,21 @@ function Index() {
                   variant="outline"
                   size="sm"
                   className="mt-2"
-                  onClick={() => void retrySession()}
+                  disabled={retrying}
+                  onClick={async () => {
+                    setRetrying(true);
+                    try {
+                      await retrySession();
+                    } finally {
+                      setRetrying(false);
+                    }
+                  }}
                 >
                   {t("session.retry")}
                 </Button>
               </div>
             )}
+
 
             {error && (
               <p

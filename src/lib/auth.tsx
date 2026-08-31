@@ -256,13 +256,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const retrySession = useCallback(async () => {
-    setSessionError(null);
-    setLoading(true);
-    void ensureAnonymousSession((msg) => {
-      setSessionError(msg);
+    await bootstrap();
+  }, [bootstrap]);
+
+  /** Returns true as soon as a usable session exists, retrying if needed. */
+  const ensureSession = useCallback(async () => {
+    if (session) return true;
+    const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    if (data.session) {
+      setSession(data.session);
+      setSessionError(null);
       setLoading(false);
-    });
-  }, []);
+      return true;
+    }
+    return bootstrap();
+  }, [session, bootstrap]);
 
   const isAnonymous = session?.user?.is_anonymous ?? false;
 
@@ -275,6 +283,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAnonymous,
       sessionError,
       retrySession,
+      ensureSession,
       signUp,
       signIn,
       signInWithGoogle,
@@ -289,6 +298,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAnonymous,
       sessionError,
       retrySession,
+      ensureSession,
       signUp,
       signIn,
       signInWithGoogle,
@@ -297,6 +307,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
     ],
   );
+
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

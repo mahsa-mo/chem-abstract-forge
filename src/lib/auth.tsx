@@ -26,6 +26,8 @@ type AuthCtx = {
   isAnonymous: boolean;
   sessionError: string | null;
   retrySession: () => Promise<void>;
+  /** Ensures a session exists right now; resolves true when one is available. */
+  ensureSession: () => Promise<boolean>;
   signUp: (email: string, password: string, name: string) => Promise<{ error?: string }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signInWithGoogle: () => Promise<{ error?: string }>;
@@ -36,19 +38,75 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx | null>(null);
 
+/** Startup validation of the browser-safe backend config, with clear diagnostics. */
+function validateEnv(): string | null {
+  const url =
+    import.meta.env['VITE_SUPABASE_URL'] ||
+    (import.meta.env['VITE_SUPABASE_PROJECT_ID']
+      ? `https://${import.meta.env['VITE_SUPABASE_PROJECT_ID']}.supabase.co`
+      : undefined);
+  const key = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'];
+  const missing: string[] = [];
+  if (!url) missing.push("VITE_SUPABASE_URL");
+  if (!key) missing.push("VITE_SUPABASE_PUBLISHABLE_KEY");
+  if (missing.length) {
+    console.error(
+      `[auth] Backend configuration missing: ${missing.join(", ")}. ` +
+        `The app cannot create a session until these are provided.`,
+    );
+    return `Configuration missing: ${missing.join(", ")}`;
+  }
+  if (!/^https:\/\/[^/]+\.supabase\.co\/?$/.test(String(url))) {
+    console.warn(`[auth] Unexpected backend URL shape: ${url}`);
+  }
+  return null;
+}
+
+const MAX_ATTEMPTS = 4;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 // Module-level guard: prevents duplicate anonymous sign-in calls across
 // React StrictMode double-invokes and fast re-renders.
-let anonSignInInFlight: Promise<void> | null = null;
+let anonSignInInFlight: Promise<boolean> | null = null;
 
-async function ensureAnonymousSession(onError: (msg: string) => void): Promise<void> {
+/**
+ * Creates an anonymous session with bounded exponential-backoff retries so a
+ * transient network drop never leaves the app permanently stuck.
+ */
+async function ensureAnonymousSession(onError: (msg: string | null) => void): Promise<boolean> {
   if (anonSignInInFlight) return anonSignInInFlight;
   anonSignInInFlight = (async () => {
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) onError(error.message);
-    anonSignInInFlight = null;
+    try {
+      const { data: existing } = await supabase.auth.getSession();
+      if (existing.session) {
+        onError(null);
+        return true;
+      }
+
+      let lastMessage = "Unable to start a session";
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          const { data, error } = await supabase.auth.signInAnonymously();
+          if (!error && data.session) {
+            onError(null);
+            return true;
+          }
+          lastMessage = error?.message ?? lastMessage;
+        } catch (e) {
+          lastMessage = e instanceof Error ? e.message : String(e);
+        }
+        console.warn(`[auth] anonymous sign-in attempt ${attempt} failed: ${lastMessage}`);
+        if (attempt < MAX_ATTEMPTS) await sleep(400 * 2 ** (attempt - 1));
+      }
+      onError(lastMessage);
+      return false;
+    } finally {
+      anonSignInInFlight = null;
+    }
   })();
   return anonSignInInFlight;
 }
+
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);

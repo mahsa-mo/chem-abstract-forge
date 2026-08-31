@@ -4,9 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
@@ -26,6 +28,8 @@ type AuthCtx = {
   isAnonymous: boolean;
   sessionError: string | null;
   retrySession: () => Promise<void>;
+  /** Ensures a session exists right now; resolves true when one is available. */
+  ensureSession: () => Promise<boolean>;
   signUp: (email: string, password: string, name: string) => Promise<{ error?: string }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signInWithGoogle: () => Promise<{ error?: string }>;
@@ -36,52 +40,123 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx | null>(null);
 
+/** Startup validation of the browser-safe backend config, with clear diagnostics. */
+function validateEnv(): string | null {
+  const url =
+    import.meta.env['VITE_SUPABASE_URL'] ||
+    (import.meta.env['VITE_SUPABASE_PROJECT_ID']
+      ? `https://${import.meta.env['VITE_SUPABASE_PROJECT_ID']}.supabase.co`
+      : undefined);
+  const key = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'];
+  const missing: string[] = [];
+  if (!url) missing.push("VITE_SUPABASE_URL");
+  if (!key) missing.push("VITE_SUPABASE_PUBLISHABLE_KEY");
+  if (missing.length) {
+    console.error(
+      `[auth] Backend configuration missing: ${missing.join(", ")}. ` +
+        `The app cannot create a session until these are provided.`,
+    );
+    return `Configuration missing: ${missing.join(", ")}`;
+  }
+  if (!/^https:\/\/[^/]+\.supabase\.co\/?$/.test(String(url))) {
+    console.warn(`[auth] Unexpected backend URL shape: ${url}`);
+  }
+  return null;
+}
+
+const MAX_ATTEMPTS = 4;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 // Module-level guard: prevents duplicate anonymous sign-in calls across
 // React StrictMode double-invokes and fast re-renders.
-let anonSignInInFlight: Promise<void> | null = null;
+let anonSignInInFlight: Promise<boolean> | null = null;
 
-async function ensureAnonymousSession(onError: (msg: string) => void): Promise<void> {
+/**
+ * Creates an anonymous session with bounded exponential-backoff retries so a
+ * transient network drop never leaves the app permanently stuck.
+ */
+async function ensureAnonymousSession(onError: (msg: string | null) => void): Promise<boolean> {
   if (anonSignInInFlight) return anonSignInInFlight;
   anonSignInInFlight = (async () => {
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) onError(error.message);
-    anonSignInInFlight = null;
+    try {
+      const { data: existing } = await supabase.auth.getSession();
+      if (existing.session) {
+        onError(null);
+        return true;
+      }
+
+      let lastMessage = "Unable to start a session";
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          const { data, error } = await supabase.auth.signInAnonymously();
+          if (!error && data.session) {
+            onError(null);
+            return true;
+          }
+          lastMessage = error?.message ?? lastMessage;
+        } catch (e) {
+          lastMessage = e instanceof Error ? e.message : String(e);
+        }
+        console.warn(`[auth] anonymous sign-in attempt ${attempt} failed: ${lastMessage}`);
+        if (attempt < MAX_ATTEMPTS) await sleep(400 * 2 ** (attempt - 1));
+      }
+      onError(lastMessage);
+      return false;
+    } finally {
+      anonSignInInFlight = null;
+    }
   })();
   return anonSignInInFlight;
 }
+
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  const bootstrap = useCallback(async () => {
+    const envError = validateEnv();
+    if (envError) {
+      if (mountedRef.current) {
+        setSessionError(envError);
+        setLoading(false);
+      }
+      return false;
+    }
+    if (mountedRef.current) {
+      setSessionError(null);
+      setLoading(true);
+    }
+    const ok = await ensureAnonymousSession((msg) => {
+      if (mountedRef.current) setSessionError(msg);
+    });
+    if (mountedRef.current) setLoading(false);
+    return ok;
+  }, []);
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      if (!mounted) return;
+      if (!mountedRef.current) return;
       setSession(s);
       if (s) {
         setSessionError(null);
         setLoading(false);
       } else if (event === "SIGNED_OUT") {
         // After sign-out, bootstrap a fresh anonymous session.
-        setSessionError(null);
-        setLoading(true);
-        void ensureAnonymousSession((msg) => {
-          if (!mounted) return;
-          setSessionError(msg);
-          setLoading(false);
-        });
+        void bootstrap();
       }
       // For INITIAL_SESSION with null, don't set loading=false —
       // the mount effect's getSession + anonymous bootstrap handles it.
     });
 
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
+      const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+      if (!mountedRef.current) return;
 
       if (data.session) {
         setSession(data.session);
@@ -89,20 +164,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // No existing session — bootstrap an anonymous one silently.
-      void ensureAnonymousSession((msg) => {
-        if (!mounted) return;
-        setSessionError(msg);
-        setLoading(false);
-      });
-      // On success, onAuthStateChange fires SIGNED_IN and sets loading=false.
+      // No existing session — bootstrap an anonymous one silently (with retries).
+      void bootstrap();
     })();
 
+    // Recover automatically when the browser regains connectivity.
+    const onOnline = () => {
+      if (!mountedRef.current) return;
+      if (!session && !anonSignInInFlight) void bootstrap();
+    };
+    if (typeof window !== "undefined") window.addEventListener("online", onOnline);
+
     return () => {
-      mounted = false;
+      mountedRef.current = false;
+      if (typeof window !== "undefined") window.removeEventListener("online", onOnline);
       sub.subscription.unsubscribe();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootstrap]);
+
 
   const userId = session?.user.id;
 
@@ -178,13 +258,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const retrySession = useCallback(async () => {
-    setSessionError(null);
-    setLoading(true);
-    void ensureAnonymousSession((msg) => {
-      setSessionError(msg);
+    await bootstrap();
+  }, [bootstrap]);
+
+  /** Returns true as soon as a usable session exists, retrying if needed. */
+  const ensureSession = useCallback(async () => {
+    if (session) return true;
+    const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    if (data.session) {
+      setSession(data.session);
+      setSessionError(null);
       setLoading(false);
-    });
-  }, []);
+      return true;
+    }
+    return bootstrap();
+  }, [session, bootstrap]);
 
   const isAnonymous = session?.user?.is_anonymous ?? false;
 
@@ -197,6 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAnonymous,
       sessionError,
       retrySession,
+      ensureSession,
       signUp,
       signIn,
       signInWithGoogle,
@@ -211,6 +300,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAnonymous,
       sessionError,
       retrySession,
+      ensureSession,
       signUp,
       signIn,
       signInWithGoogle,
@@ -219,6 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
     ],
   );
+
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

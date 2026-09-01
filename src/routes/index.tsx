@@ -83,13 +83,14 @@ async function saveAbstract(userId: string, dataUrl: string, text: string) {
 
 function Index() {
   const { t, dir } = useI18n();
-  const { user, loading: authLoading, sessionError, retrySession } = useAuth();
+  const { user, loading: authLoading, sessionError, retrySession, ensureSession } = useAuth();
   const { isGuest, used, limit, remaining, record } = useUsage();
   const [text, setText] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [isFinal, setIsFinal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBanner, setShowBanner] = useState(true);
   const [generationId, setGenerationId] = useState<string | null>(null);
@@ -100,8 +101,8 @@ function Index() {
   const guestBlocked = isGuest && quotaReached;
   const regenRemaining = Math.max(0, REGEN_LIMIT - regenUsed);
   const regenExhausted = regenRemaining <= 0;
-  const busy = loading || regenerating;
-  const noSession = authLoading || !!sessionError;
+  const busy = loading || regenerating || retrying;
+
 
   // Restore the latest original and its regeneration count after a refresh.
   useEffect(() => {

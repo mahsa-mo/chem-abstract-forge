@@ -41,14 +41,25 @@ export class ProviderError extends Error {
  * do not charge the user's quota for this attempt."
  */
 export async function generateAbstractImage(prompt: string): Promise<ProviderImageResult> {
-  const key = process.env["GEMINI_API_KEY"];
-  if (!key) {
-    throw new ProviderError("Missing GEMINI_API_KEY environment variable", 500);
+  const geminiKey = process.env["GEMINI_API_KEY"];
+  const gatewayKey = process.env["LOVABLE_API_KEY"];
+
+  // Prefer a project-owned Gemini key when configured; otherwise fall back to
+  // the built-in Lovable AI Gateway so image generation never hard-fails just
+  // because GEMINI_API_KEY has not been set for this environment.
+  if (!geminiKey) {
+    if (!gatewayKey) {
+      throw new ProviderError(
+        "No image provider credential configured (GEMINI_API_KEY or LOVABLE_API_KEY)",
+        500,
+      );
+    }
+    return generateViaLovableGateway(prompt, gatewayKey);
   }
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${GEMINI_ENDPOINT}?key=${key}`, {
+    upstream = await fetch(`${GEMINI_ENDPOINT}?key=${geminiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -71,6 +82,7 @@ export async function generateAbstractImage(prompt: string): Promise<ProviderIma
       upstream.status,
     );
   }
+
 
   const json = (await upstream.json()) as {
     candidates?: {

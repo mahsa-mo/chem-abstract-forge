@@ -104,3 +104,50 @@ export async function generateAbstractImage(prompt: string): Promise<ProviderIma
     mimeType: imagePart.inlineData.mimeType ?? "image/png",
   };
 }
+
+/**
+ * Fallback path: Lovable's built-in AI Gateway (no project API key needed).
+ * Returns the same finished-image shape as the direct Gemini call.
+ */
+async function generateViaLovableGateway(
+  prompt: string,
+  apiKey: string,
+): Promise<ProviderImageResult> {
+  let res: Response;
+  try {
+    res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3.1-flash-image",
+        prompt,
+        n: 1,
+      }),
+    });
+  } catch (err) {
+    throw new ProviderError(
+      err instanceof Error ? err.message : "Network error contacting AI gateway",
+      502,
+    );
+  }
+
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "");
+    throw new ProviderError(
+      `AI gateway error (${res.status}): ${bodyText || "no details"}`,
+      res.status,
+    );
+  }
+
+  const json = (await res.json()) as {
+    data?: { b64_json?: string; url?: string }[];
+  };
+  const b64 = json.data?.[0]?.b64_json;
+  if (!b64) {
+    throw new ProviderError("AI gateway response contained no image data", 502);
+  }
+  return { b64_json: b64, mimeType: "image/png" };
+}

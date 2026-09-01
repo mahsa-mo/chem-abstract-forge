@@ -83,7 +83,7 @@ async function saveAbstract(userId: string, dataUrl: string, text: string) {
 
 function Index() {
   const { t, dir } = useI18n();
-  const { user, loading: authLoading, sessionError, retrySession, ensureSession } = useAuth();
+  const { user, sessionError, retrySession, ensureSession } = useAuth();
   const { isGuest, used, limit, remaining, record } = useUsage();
   const [text, setText] = useState("");
   const [image, setImage] = useState<string | null>(null);

@@ -5,20 +5,17 @@
  * If we ever swap providers (different model, different vendor), every
  * change happens here — no other file should need to change.
  *
- * Currently: calls Google's Gemini API directly (generativelanguage.googleapis.com)
- * using the project's own GEMINI_API_KEY, via the model "gemini-3.1-flash-image".
+ * CURRENT PROVIDER: Pollinations.ai (https://pollinations.ai)
+ *   - Free, no API key, no billing account, no signup required.
+ *   - Switched to this on 2026-09-01 because Google Gemini's image model
+ *     (gemini-3.1-flash-image) no longer has any free quota (HTTP 429,
+ *     "limit: 0" on the free tier — it now requires a billed Google Cloud
+ *     project), and the project has no way to attach international billing.
  *
- * IMPORTANT: this file intentionally does NOT stream partial image previews
- * from Gemini. Gemini returns the finished image in a single response chunk
- * (unlike OpenAI-style incremental image previews), so we call the plain
- * (non-streaming) endpoint and hand back one complete image. The calling
- * route (`generate-abstract.ts`) still exposes the same streaming-shaped
- * contract to the frontend — it just emits a single "completed" event
- * instead of multiple "partial" ones. No frontend code needs to change.
+ * The old direct-Gemini implementation is kept below (unused, exported as
+ * `generateAbstractImageViaGemini`) so it's a one-line swap to switch back
+ * once a billing path is sorted out — nothing else in the app needs to change.
  */
-
-const GEMINI_MODEL = "gemini-3.1-flash-image";
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 export type ProviderImageResult = {
   b64_json: string;
@@ -34,19 +31,59 @@ export class ProviderError extends Error {
   }
 }
 
+const POLLINATIONS_ENDPOINT = "https://image.pollinations.ai/prompt";
+
 /**
- * Calls Gemini directly and returns one finished base64-encoded image.
- * Throws ProviderError (with an HTTP-style status) on any failure —
- * callers must treat a thrown ProviderError as "no image produced,
- * do not charge the user's quota for this attempt."
+ * Calls Pollinations.ai and returns one finished base64-encoded image.
+ * Pollinations takes the prompt directly in the URL path and returns the
+ * raw image bytes (no JSON wrapper, no auth) — so this just fetches the
+ * URL and base64-encodes whatever comes back.
  */
 export async function generateAbstractImage(prompt: string): Promise<ProviderImageResult> {
+  const url =
+    `${POLLINATIONS_ENDPOINT}/${encodeURIComponent(prompt)}` +
+    `?width=1024&height=1024&nologo=true&model=flux`;
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(url);
+  } catch (err) {
+    throw new ProviderError(
+      err instanceof Error ? err.message : "Network error contacting Pollinations",
+      502,
+    );
+  }
+
+  if (!upstream.ok) {
+    const bodyText = await upstream.text().catch(() => "");
+    throw new ProviderError(
+      `Pollinations error (${upstream.status}): ${bodyText || "no details"}`,
+      upstream.status,
+    );
+  }
+
+  const arrayBuffer = await upstream.arrayBuffer();
+  if (arrayBuffer.byteLength === 0) {
+    throw new ProviderError("Pollinations response contained no image data", 502);
+  }
+
+  return {
+    b64_json: Buffer.from(arrayBuffer).toString("base64"),
+    mimeType: upstream.headers.get("content-type") ?? "image/jpeg",
+  };
+}
+
+/**
+ * UNUSED FOR NOW — kept for when a billed Gemini project becomes available.
+ * Calls Google's Gemini API directly using the project's own GEMINI_API_KEY,
+ * via the model "gemini-3.1-flash-image". Not called anywhere currently.
+ */
+export async function generateAbstractImageViaGemini(prompt: string): Promise<ProviderImageResult> {
+  const GEMINI_MODEL = "gemini-3.1-flash-image";
+  const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const geminiKey = process.env["GEMINI_API_KEY"];
   const gatewayKey = process.env["LOVABLE_API_KEY"];
 
-  // Prefer a project-owned Gemini key when configured; otherwise fall back to
-  // the built-in Lovable AI Gateway so image generation never hard-fails just
-  // because GEMINI_API_KEY has not been set for this environment.
   if (!geminiKey) {
     if (!gatewayKey) {
       throw new ProviderError(

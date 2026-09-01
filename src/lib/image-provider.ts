@@ -41,14 +41,25 @@ export class ProviderError extends Error {
  * do not charge the user's quota for this attempt."
  */
 export async function generateAbstractImage(prompt: string): Promise<ProviderImageResult> {
-  const key = process.env["GEMINI_API_KEY"];
-  if (!key) {
-    throw new ProviderError("Missing GEMINI_API_KEY environment variable", 500);
+  const geminiKey = process.env["GEMINI_API_KEY"];
+  const gatewayKey = process.env["LOVABLE_API_KEY"];
+
+  // Prefer a project-owned Gemini key when configured; otherwise fall back to
+  // the built-in Lovable AI Gateway so image generation never hard-fails just
+  // because GEMINI_API_KEY has not been set for this environment.
+  if (!geminiKey) {
+    if (!gatewayKey) {
+      throw new ProviderError(
+        "No image provider credential configured (GEMINI_API_KEY or LOVABLE_API_KEY)",
+        500,
+      );
+    }
+    return generateViaLovableGateway(prompt, gatewayKey);
   }
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${GEMINI_ENDPOINT}?key=${key}`, {
+    upstream = await fetch(`${GEMINI_ENDPOINT}?key=${geminiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -72,6 +83,7 @@ export async function generateAbstractImage(prompt: string): Promise<ProviderIma
     );
   }
 
+
   const json = (await upstream.json()) as {
     candidates?: {
       content?: {
@@ -91,4 +103,51 @@ export async function generateAbstractImage(prompt: string): Promise<ProviderIma
     b64_json: imagePart.inlineData.data,
     mimeType: imagePart.inlineData.mimeType ?? "image/png",
   };
+}
+
+/**
+ * Fallback path: Lovable's built-in AI Gateway (no project API key needed).
+ * Returns the same finished-image shape as the direct Gemini call.
+ */
+async function generateViaLovableGateway(
+  prompt: string,
+  apiKey: string,
+): Promise<ProviderImageResult> {
+  let res: Response;
+  try {
+    res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3.1-flash-image",
+        prompt,
+        n: 1,
+      }),
+    });
+  } catch (err) {
+    throw new ProviderError(
+      err instanceof Error ? err.message : "Network error contacting AI gateway",
+      502,
+    );
+  }
+
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "");
+    throw new ProviderError(
+      `AI gateway error (${res.status}): ${bodyText || "no details"}`,
+      res.status,
+    );
+  }
+
+  const json = (await res.json()) as {
+    data?: { b64_json?: string; url?: string }[];
+  };
+  const b64 = json.data?.[0]?.b64_json;
+  if (!b64) {
+    throw new ProviderError("AI gateway response contained no image data", 502);
+  }
+  return { b64_json: b64, mimeType: "image/png" };
 }

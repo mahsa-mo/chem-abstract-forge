@@ -83,13 +83,14 @@ async function saveAbstract(userId: string, dataUrl: string, text: string) {
 
 function Index() {
   const { t, dir } = useI18n();
-  const { user, loading: authLoading, sessionError, retrySession } = useAuth();
+  const { user, sessionError, retrySession, ensureSession } = useAuth();
   const { isGuest, used, limit, remaining, record } = useUsage();
   const [text, setText] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [isFinal, setIsFinal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBanner, setShowBanner] = useState(true);
   const [generationId, setGenerationId] = useState<string | null>(null);
@@ -100,8 +101,8 @@ function Index() {
   const guestBlocked = isGuest && quotaReached;
   const regenRemaining = Math.max(0, REGEN_LIMIT - regenUsed);
   const regenExhausted = regenRemaining <= 0;
-  const busy = loading || regenerating;
-  const noSession = authLoading || !!sessionError;
+  const busy = loading || regenerating || retrying;
+
 
   // Restore the latest original and its regeneration count after a refresh.
   useEffect(() => {
@@ -127,7 +128,7 @@ function Index() {
   }, [user]);
 
   async function handleGenerate() {
-    if (busy || noSession) return;
+    if (busy) return;
     setError(null);
     if (text.trim().length < 40) {
       setError(t("error.tooShort"));
@@ -137,7 +138,19 @@ function Index() {
       setError(t("quota.reached", { max: limit }));
       return;
     }
+    // No usable session yet (cold start or a transient network drop): retry now
+    // instead of leaving the button in a permanently dead state.
+    if (!user) {
+      setRetrying(true);
+      const ok = await ensureSession();
+      setRetrying(false);
+      if (!ok) {
+        setError(t("session.error"));
+        return;
+      }
+    }
     setLoading(true);
+
     setImage(null);
     setIsFinal(false);
     setGenerationId(null);
@@ -172,10 +185,20 @@ function Index() {
    * `create_generation` database function; UI state is only a mirror of it.
    */
   async function handleRegenerate() {
-    if (busy || regenExhausted || noSession) return;
+    if (busy || regenExhausted) return;
     setError(null);
+    if (!user) {
+      setRetrying(true);
+      const ok = await ensureSession();
+      setRetrying(false);
+      if (!ok) {
+        setError(t("session.error"));
+        return;
+      }
+    }
     setRegenerating(true);
     setIsFinal(false);
+
     let finalImage: string | null = null;
     try {
       await streamAbstract(text, (dataUrl, final) => {

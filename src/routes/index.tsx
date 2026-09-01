@@ -185,10 +185,20 @@ function Index() {
    * `create_generation` database function; UI state is only a mirror of it.
    */
   async function handleRegenerate() {
-    if (busy || regenExhausted || noSession) return;
+    if (busy || regenExhausted) return;
     setError(null);
+    if (!user) {
+      setRetrying(true);
+      const ok = await ensureSession();
+      setRetrying(false);
+      if (!ok) {
+        setError(t("session.error"));
+        return;
+      }
+    }
     setRegenerating(true);
     setIsFinal(false);
+
     let finalImage: string | null = null;
     try {
       await streamAbstract(text, (dataUrl, final) => {

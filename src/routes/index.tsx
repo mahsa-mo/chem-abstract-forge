@@ -128,7 +128,7 @@ function Index() {
   }, [user]);
 
   async function handleGenerate() {
-    if (busy || noSession) return;
+    if (busy) return;
     setError(null);
     if (text.trim().length < 40) {
       setError(t("error.tooShort"));
@@ -138,7 +138,19 @@ function Index() {
       setError(t("quota.reached", { max: limit }));
       return;
     }
+    // No usable session yet (cold start or a transient network drop): retry now
+    // instead of leaving the button in a permanently dead state.
+    if (!user) {
+      setRetrying(true);
+      const ok = await ensureSession();
+      setRetrying(false);
+      if (!ok) {
+        setError(t("session.error"));
+        return;
+      }
+    }
     setLoading(true);
+
     setImage(null);
     setIsFinal(false);
     setGenerationId(null);

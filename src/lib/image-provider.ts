@@ -40,6 +40,33 @@ const POLLINATIONS_ENDPOINT = "https://image.pollinations.ai/prompt";
  * URL and base64-encodes whatever comes back.
  */
 export async function generateAbstractImage(prompt: string): Promise<ProviderImageResult> {
+  // Fallback chain: Pollinations → Gemini → Cloudflare.
+  // Each provider is only reached if every provider before it throws.
+  try {
+    return await generateWithPollinations(prompt);
+  } catch (pollinationsErr) {
+    try {
+      return await generateAbstractImageViaGemini(prompt);
+    } catch (geminiErr) {
+      try {
+        const blob = await generateImageWithCloudflare(prompt);
+        const arrayBuffer = await blob.arrayBuffer();
+        return {
+          b64_json: Buffer.from(arrayBuffer).toString("base64"),
+          mimeType: blob.type || "image/jpeg",
+        };
+      } catch (cloudflareErr) {
+        const message =
+          cloudflareErr instanceof Error
+            ? cloudflareErr.message
+            : "Cloudflare image generation failed";
+        throw new ProviderError(message, 502);
+      }
+    }
+  }
+}
+
+async function generateWithPollinations(prompt: string): Promise<ProviderImageResult> {
   const url =
     `${POLLINATIONS_ENDPOINT}/${encodeURIComponent(prompt)}` +
     `?width=1024&height=1024&nologo=true&model=flux`;
@@ -187,4 +214,65 @@ async function generateViaLovableGateway(
     throw new ProviderError("AI gateway response contained no image data", 502);
   }
   return { b64_json: b64, mimeType: "image/png" };
+}
+
+/**
+ * Third fallback: Cloudflare Workers AI (@cf/black-forest-labs/flux-1-schnell).
+ * Called only when both Pollinations and Gemini fail.
+ */
+export async function generateImageWithCloudflare(prompt: string): Promise<Blob> {
+  const accountId = process.env["CLOUDFLARE_ACCOUNT_ID"];
+  const apiToken = process.env["CLOUDFLARE_API_TOKEN"];
+
+  if (!accountId || !apiToken) {
+    throw new ProviderError(
+      "Missing Cloudflare credentials (CLOUDFLARE_ACCOUNT_ID or CLOUDFLARE_API_TOKEN)",
+      500,
+    );
+  }
+
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell`;
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prompt }),
+    });
+  } catch (err) {
+    throw new ProviderError(
+      err instanceof Error ? err.message : "Network error contacting Cloudflare",
+      502,
+    );
+  }
+
+  if (!upstream.ok) {
+    const bodyText = await upstream.text().catch(() => "");
+    throw new ProviderError(
+      `Cloudflare error (${upstream.status}): ${bodyText || "no details"}`,
+      upstream.status,
+    );
+  }
+
+  const json = (await upstream.json()) as {
+    result?: { image?: string };
+    success?: boolean;
+    errors?: { message?: string }[];
+  };
+
+  const imageB64 = json.result?.image;
+  if (!imageB64) {
+    const cfErrors = json.errors?.map((e) => e.message).join(", ") || "no details";
+    throw new ProviderError(
+      `Cloudflare response contained no image data (${cfErrors})`,
+      502,
+    );
+  }
+
+  const binary = Buffer.from(imageB64, "base64");
+  return new Blob([binary], { type: "image/jpeg" });
 }

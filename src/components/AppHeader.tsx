@@ -182,7 +182,9 @@ export function AppHeader() {
         <Link to="/" className="flex items-center gap-3">
           <FlaskLogo />
           <span>
-            <span className="block text-base font-semibold tracking-tight">{t("app.name")}</span>
+            <span className="block font-display text-base font-bold tracking-tight">
+            {t("app.name")}
+          </span>
             <span className="hidden text-xs text-primary-foreground/70 sm:block">
               {t("app.tagline")}
             </span>

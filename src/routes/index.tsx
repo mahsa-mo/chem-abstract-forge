@@ -4,6 +4,7 @@ import { Download, ExternalLink, FlaskConical, Sparkles, X } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { AppHeader } from "@/components/AppHeader";
 import { MolecularBackground } from "@/components/MolecularBackground";
+import { ReactionArrow } from "@/components/ReactionArrow";
 import { useI18n } from "@/lib/i18n";
 import { streamAbstract } from "@/lib/streamImage";
 import { useAuth } from "@/lib/auth";
@@ -289,9 +290,9 @@ function Index() {
           </div>
         )}
 
-        <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-[1fr_auto_1fr]">
           <section className="rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5">
-            <label htmlFor="source" className="text-sm font-medium text-foreground">
+            <label htmlFor="source" className="font-display text-sm font-semibold text-foreground">
               {t("input.label")}
             </label>
             <textarea
@@ -315,7 +316,7 @@ function Index() {
                 size="lg"
                 onClick={handleGenerate}
                 disabled={busy || quotaReached}
-                className="w-full sm:w-auto"
+                className="btn-gradient w-full font-display sm:w-auto"
               >
                 <Sparkles className="size-4" aria-hidden />
                 {loading ? t("generating") : t("generate")}
@@ -369,12 +370,14 @@ function Index() {
             )}
           </section>
 
+          <ReactionArrow />
+
           <section
             ref={outputRef}
             className="rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-foreground">{t("output.title")}</h2>
+              <h2 className="font-display text-sm font-semibold text-foreground">{t("output.title")}</h2>
               {image && isFinal && (
                 <div className="flex flex-wrap items-center gap-2">
                   <Button

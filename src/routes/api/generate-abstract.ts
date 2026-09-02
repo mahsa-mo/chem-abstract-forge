@@ -29,9 +29,9 @@ export const Route = createFileRoute("/api/generate-abstract")({
         try {
           image = await generateAbstractImage(buildAbstractPrompt(text.slice(0, 4000)));
         } catch (err) {
-          const status = err instanceof ProviderError ? err.status : 500;
-          const message = err instanceof Error ? err.message : "Image generation failed";
-          return new Response(message, { status });
+          console.error("Image generation failed:", err instanceof Error ? err.message : err);
+          const status = err instanceof ProviderError ? err.status : 502;
+          return new Response("Image generation failed, please try again", { status });
         }
 
         if (!stream) {

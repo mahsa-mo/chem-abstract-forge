@@ -40,14 +40,14 @@ const POLLINATIONS_ENDPOINT = "https://image.pollinations.ai/prompt";
  * URL and base64-encodes whatever comes back.
  */
 export async function generateAbstractImage(prompt: string): Promise<ProviderImageResult> {
-  // Fallback chain: Pollinations → Gemini → Cloudflare.
+  // Fallback chain: Gemini → Pollinations → Cloudflare.
   // Each provider is only reached if every provider before it throws.
   try {
-    return await generateWithPollinations(prompt);
-  } catch (pollinationsErr) {
+    return await generateAbstractImageViaGemini(prompt);
+  } catch (geminiErr) {
     try {
-      return await generateAbstractImageViaGemini(prompt);
-    } catch (geminiErr) {
+      return await generateWithPollinations(prompt);
+    } catch (pollinationsErr) {
       try {
         const blob = await generateImageWithCloudflare(prompt);
         const arrayBuffer = await blob.arrayBuffer();

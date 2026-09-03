@@ -42,28 +42,36 @@ const POLLINATIONS_ENDPOINT = "https://image.pollinations.ai/prompt";
  * URL and base64-encodes whatever comes back.
  */
 export async function generateAbstractImage(prompt: string): Promise<ProviderImageResult> {
-  // Fallback chain: Gemini → Pollinations → Cloudflare.
+  // Fallback chain: direct Gemini → Lovable AI gateway → Pollinations → Cloudflare.
   // Each provider is only reached if every provider before it throws.
   try {
     return await generateAbstractImageViaGemini(prompt);
   } catch (geminiErr) {
     try {
-      return await generateWithPollinations(prompt);
-    } catch (pollinationsErr) {
+      const gatewayKey = process.env["LOVABLE_API_KEY"];
+      if (!gatewayKey) {
+        throw new ProviderError("LOVABLE_API_KEY is not configured", 500);
+      }
+      return await generateViaLovableGateway(prompt, gatewayKey);
+    } catch (gatewayErr) {
       try {
-        const blob = await generateImageWithCloudflare(prompt);
-        const arrayBuffer = await blob.arrayBuffer();
-        return {
-          b64_json: Buffer.from(arrayBuffer).toString("base64"),
-          mimeType: blob.type || "image/jpeg",
-          provider: "cloudflare" as const,
-        };
-      } catch (cloudflareErr) {
-        const message =
-          cloudflareErr instanceof Error
-            ? cloudflareErr.message
-            : "Cloudflare image generation failed";
-        throw new ProviderError(message, 502);
+        return await generateWithPollinations(prompt);
+      } catch (pollinationsErr) {
+        try {
+          const blob = await generateImageWithCloudflare(prompt);
+          const arrayBuffer = await blob.arrayBuffer();
+          return {
+            b64_json: Buffer.from(arrayBuffer).toString("base64"),
+            mimeType: blob.type || "image/jpeg",
+            provider: "cloudflare" as const,
+          };
+        } catch (cloudflareErr) {
+          const message =
+            cloudflareErr instanceof Error
+              ? cloudflareErr.message
+              : "Cloudflare image generation failed";
+          throw new ProviderError(message, 502);
+        }
       }
     }
   }
@@ -122,16 +130,9 @@ export async function generateAbstractImageViaGemini(prompt: string): Promise<Pr
   const GEMINI_MODEL = "gemini-3.1-flash-image";
   const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const geminiKey = process.env["GEMINI_API_KEY"];
-  const gatewayKey = process.env["LOVABLE_API_KEY"];
 
   if (!geminiKey) {
-    if (!gatewayKey) {
-      throw new ProviderError(
-        "No image provider credential configured (GEMINI_API_KEY or LOVABLE_API_KEY)",
-        500,
-      );
-    }
-    return generateViaLovableGateway(prompt, gatewayKey);
+    throw new ProviderError("GEMINI_API_KEY is not configured", 500);
   }
 
   let upstream: Response;

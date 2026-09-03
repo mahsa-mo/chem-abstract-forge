@@ -20,7 +20,9 @@
 export type ProviderImageResult = {
   b64_json: string;
   mimeType: string;
+  provider: "gemini" | "pollinations" | "cloudflare";
 };
+
 
 export class ProviderError extends Error {
   status: number;
@@ -54,6 +56,7 @@ export async function generateAbstractImage(prompt: string): Promise<ProviderIma
         return {
           b64_json: Buffer.from(arrayBuffer).toString("base64"),
           mimeType: blob.type || "image/jpeg",
+          provider: "cloudflare" as const,
         };
       } catch (cloudflareErr) {
         const message =
@@ -91,6 +94,7 @@ async function generateWithPollinations(prompt: string): Promise<ProviderImageRe
   }
 
   const arrayBuffer = await upstream.arrayBuffer();
+  console.log("[pollinations] response byteLength:", arrayBuffer.byteLength);
   if (arrayBuffer.byteLength === 0) {
     throw new ProviderError("Pollinations response contained no image data", 502);
   }
@@ -105,6 +109,7 @@ async function generateWithPollinations(prompt: string): Promise<ProviderImageRe
   return {
     b64_json: Buffer.from(arrayBuffer).toString("base64"),
     mimeType: upstream.headers.get("content-type") ?? "image/jpeg",
+    provider: "pollinations" as const,
   };
 }
 
@@ -174,6 +179,7 @@ export async function generateAbstractImageViaGemini(prompt: string): Promise<Pr
   return {
     b64_json: imagePart.inlineData.data,
     mimeType: imagePart.inlineData.mimeType ?? "image/png",
+    provider: "gemini" as const,
   };
 }
 
@@ -221,7 +227,7 @@ async function generateViaLovableGateway(
   if (!b64) {
     throw new ProviderError("AI gateway response contained no image data", 502);
   }
-  return { b64_json: b64, mimeType: "image/png" };
+  return { b64_json: b64, mimeType: "image/png", provider: "gemini" as const };
 }
 
 /**

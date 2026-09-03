@@ -67,9 +67,10 @@ export async function generateAbstractImage(prompt: string): Promise<ProviderIma
 }
 
 async function generateWithPollinations(prompt: string): Promise<ProviderImageResult> {
+  const seed = Math.floor(Math.random() * 1000000);
   const url =
     `${POLLINATIONS_ENDPOINT}/${encodeURIComponent(prompt)}` +
-    `?width=1024&height=1024&nologo=true&model=flux`;
+    `?width=1024&height=1024&nologo=true&model=flux&seed=${seed}`;
 
   let upstream: Response;
   try {
@@ -92,6 +93,13 @@ async function generateWithPollinations(prompt: string): Promise<ProviderImageRe
   const arrayBuffer = await upstream.arrayBuffer();
   if (arrayBuffer.byteLength === 0) {
     throw new ProviderError("Pollinations response contained no image data", 502);
+  }
+
+  if (arrayBuffer.byteLength < 15000) {
+    throw new ProviderError(
+      "Pollinations returned a suspiciously small response (likely a rate-limit placeholder, not a real generated image)",
+      502,
+    );
   }
 
   return {

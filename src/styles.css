@@ -23,6 +23,8 @@
   --font-display: var(--font-display);
   --color-accent-strong: var(--accent-strong);
   --color-spark: var(--spark);
+  --color-decorative-violet: var(--decorative-violet);
+  --color-decorative-lime: var(--decorative-lime);
   --color-header: var(--header);
   --shadow-card: 0 1px 2px oklch(0.25 0.05 250 / 0.04), 0 8px 24px -12px oklch(0.25 0.05 250 / 0.16);
   --radius-sm: calc(var(--radius) - 4px);
@@ -90,6 +92,9 @@
   --accent-strong: oklch(0.712 0.125 180.7);
   /* Sharp, sparingly-used pop color — reaction "spark"/energy accents only. */
   --spark: oklch(0.765 0.145 40.3);
+  /* Remaining brand palette — used in the background chemistry motifs and the reaction arrow. */
+  --decorative-violet: oklch(0.736 0.147 289.9);
+  --decorative-lime: oklch(0.834 0.169 121.8);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.984 0.003 247.858);
   --border: oklch(0.929 0.013 255.508);
@@ -128,6 +133,8 @@
   --accent-foreground: oklch(0.984 0.003 247.858);
   --accent-strong: oklch(0.712 0.125 180.7);
   --spark: oklch(0.765 0.145 40.3);
+  --decorative-violet: oklch(0.736 0.147 289.9);
+  --decorative-lime: oklch(0.834 0.169 121.8);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.984 0.003 247.858);
   --border: oklch(1 0 0 / 10%);
@@ -252,24 +259,37 @@
 }
 
 /* Reactant -> product connector arrow between the input and output panels. */
+.reaction-arrow-glow {
+  filter: blur(14px);
+}
 .reaction-arrow-line {
-  stroke-dasharray: 5 5;
-  animation: reaction-flow 1.4s linear infinite;
+  stroke-dasharray: 6 6;
+  animation: reaction-flow 1.2s linear infinite;
 }
 .reaction-arrow-spark {
-  offset-path: path("M8 27 Q 48 8 88 27");
-  animation: reaction-travel 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  offset-path: path("M6 27 Q 50 4 94 27");
+  animation: reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 .reaction-arrow-ring {
-  offset-path: path("M8 27 Q 48 8 88 27");
+  offset-path: path("M6 27 Q 50 4 94 27");
   animation:
-    reaction-travel 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite,
-    reaction-ring 2.6s ease-out infinite;
+    reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+    reaction-ring 2.4s ease-out infinite;
+}
+.reaction-arrow-spark-v {
+  offset-path: path("M27 6 Q 4 50 27 94");
+  animation: reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.reaction-arrow-ring-v {
+  offset-path: path("M27 6 Q 4 50 27 94");
+  animation:
+    reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+    reaction-ring 2.4s ease-out infinite;
 }
 
 @keyframes reaction-flow {
   to {
-    stroke-dashoffset: -20;
+    stroke-dashoffset: -24;
   }
 }
 
@@ -286,18 +306,20 @@
   0%,
   100% {
     opacity: 0;
-    transform: scale(0.6);
+    transform: scale(0.5);
   }
   50% {
-    opacity: 0.45;
-    transform: scale(1.6);
+    opacity: 0.5;
+    transform: scale(1.8);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .reaction-arrow-line,
   .reaction-arrow-spark,
-  .reaction-arrow-ring {
+  .reaction-arrow-ring,
+  .reaction-arrow-spark-v,
+  .reaction-arrow-ring-v {
     animation: none;
   }
 }

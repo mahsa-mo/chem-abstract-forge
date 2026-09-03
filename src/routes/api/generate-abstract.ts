@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { buildAbstractPrompt } from "@/lib/abstract-prompt";
-import { generateAbstractImage, ProviderError } from "@/lib/image-provider";
+import { generateAbstractImage, ProviderError, type ProviderImageResult } from "@/lib/image-provider";
+
 
 /**
  * Swappable image-generation endpoint.
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/api/generate-abstract")({
           });
         }
 
-        let image: { b64_json: string };
+        let image: ProviderImageResult;
         try {
           image = await generateAbstractImage(buildAbstractPrompt(text.slice(0, 4000)));
         } catch (err) {
@@ -34,11 +35,18 @@ export const Route = createFileRoute("/api/generate-abstract")({
           return new Response("Image generation failed, please try again", { status });
         }
 
+        const imageHeaders = {
+          "Content-Type": "application/json",
+          "X-Image-Provider": image.provider,
+          "X-Image-Bytes": String(image.b64_json.length),
+        };
+
         if (!stream) {
           return new Response(JSON.stringify({ data: [{ b64_json: image.b64_json }] }), {
-            headers: { "Content-Type": "application/json" },
+            headers: imageHeaders,
           });
         }
+
 
         // Emit a single "completed" SSE event — Gemini returns the finished
         // image in one shot, so there are no incremental "partial_image"
@@ -59,8 +67,14 @@ export const Route = createFileRoute("/api/generate-abstract")({
         });
 
         return new Response(body, {
-          headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "X-Image-Provider": image.provider,
+            "X-Image-Bytes": String(image.b64_json.length),
+          },
         });
+
       },
     },
   },

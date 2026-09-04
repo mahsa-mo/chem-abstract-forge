@@ -267,21 +267,21 @@
   animation: reaction-flow 1.2s linear infinite;
 }
 .reaction-arrow-spark {
-  offset-path: path("M6 27 Q 50 4 94 27");
+  offset-path: path("M9,32.5 Q 48,4 84,15");
   animation: reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 .reaction-arrow-ring {
-  offset-path: path("M6 27 Q 50 4 94 27");
+  offset-path: path("M9,32.5 Q 48,4 84,15");
   animation:
     reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite,
     reaction-ring 2.4s ease-out infinite;
 }
 .reaction-arrow-spark-v {
-  offset-path: path("M27 6 Q 4 50 27 94");
+  offset-path: path("M32.5,9 Q 4,48 15,86");
   animation: reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 .reaction-arrow-ring-v {
-  offset-path: path("M27 6 Q 4 50 27 94");
+  offset-path: path("M32.5,9 Q 4,48 15,86");
   animation:
     reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite,
     reaction-ring 2.4s ease-out infinite;

@@ -290,7 +290,7 @@ function Index() {
           </div>
         )}
 
-        <div className="grid items-start gap-2 lg:grid-cols-[1fr_auto_1fr] lg:gap-1">
+        <div className="grid items-start gap-1 lg:grid-cols-[1fr_auto_1fr] lg:gap-0">
           <section className="rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5">
             <label htmlFor="source" className="font-display text-sm font-semibold text-foreground">
               {t("input.label")}

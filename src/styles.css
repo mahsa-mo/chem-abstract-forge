@@ -259,32 +259,29 @@
 }
 
 /* Reactant -> product connector arrow between the input and output panels. */
-.reaction-arrow-glow {
-  filter: blur(14px);
-}
 .reaction-arrow-line {
   stroke-dasharray: 6 6;
   animation: reaction-flow 1.2s linear infinite;
 }
 .reaction-arrow-spark {
-  offset-path: path("M9,32.5 Q 48,4 84,15");
-  animation: reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  offset-path: path("M6,58 C10,50 12,46 16,44 C24,40 30,44 28,50 C26,56 18,56 18,49 C18,43 26,38 34,34 Q 62,10 96,18");
+  animation: reaction-travel 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 .reaction-arrow-ring {
-  offset-path: path("M9,32.5 Q 48,4 84,15");
+  offset-path: path("M6,58 C10,50 12,46 16,44 C24,40 30,44 28,50 C26,56 18,56 18,49 C18,43 26,38 34,34 Q 62,10 96,18");
   animation:
-    reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite,
-    reaction-ring 2.4s ease-out infinite;
+    reaction-travel 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+    reaction-ring 2.6s ease-out infinite;
 }
 .reaction-arrow-spark-v {
-  offset-path: path("M32.5,9 Q 4,48 15,86");
-  animation: reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  offset-path: path("M58,6 C50,10 46,12 44,16 C40,24 44,30 50,28 C56,26 56,18 49,18 C43,18 38,26 34,34 Q 10,62 18,96");
+  animation: reaction-travel 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 .reaction-arrow-ring-v {
-  offset-path: path("M32.5,9 Q 4,48 15,86");
+  offset-path: path("M58,6 C50,10 46,12 44,16 C40,24 44,30 50,28 C56,26 56,18 49,18 C43,18 38,26 34,34 Q 10,62 18,96");
   animation:
-    reaction-travel 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite,
-    reaction-ring 2.4s ease-out infinite;
+    reaction-travel 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+    reaction-ring 2.6s ease-out infinite;
 }
 
 @keyframes reaction-flow {

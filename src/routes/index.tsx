@@ -291,7 +291,7 @@ function Index() {
         )}
 
         <div className="grid items-start gap-1 lg:grid-cols-[1fr_auto_1fr] lg:gap-0">
-          <section className="rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5">
+          <section className="rounded-2xl border-2 border-primary/35 bg-card p-4 shadow-card sm:p-5">
             <label htmlFor="source" className="font-display text-sm font-semibold text-foreground">
               {t("input.label")}
             </label>
@@ -374,7 +374,7 @@ function Index() {
 
           <section
             ref={outputRef}
-            className="rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5"
+            className="rounded-2xl border-2 border-accent-strong/35 bg-card p-4 shadow-card sm:p-5"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-display text-sm font-semibold text-foreground">{t("output.title")}</h2>
@@ -403,7 +403,7 @@ function Index() {
               )}
             </div>
 
-            <div className="mt-3 flex min-h-[320px] items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-muted/40">
+            <div className="mt-3 flex min-h-[320px] items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-accent-strong/30 bg-muted/40">
               {image ? (
                 <img
                   src={image}

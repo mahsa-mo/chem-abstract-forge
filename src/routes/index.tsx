@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FlaskConical, Sparkles, X } from "lucide-react";
+import { Download, ExternalLink, FlaskConical, Pencil, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ImageEditor, type EditorState } from "@/components/ImageEditor";
 import { AppHeader } from "@/components/AppHeader";
 import { MolecularBackground } from "@/components/MolecularBackground";
 import { ReactionArrow } from "@/components/ReactionArrow";

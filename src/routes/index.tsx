@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, FlaskConical, Sparkles, X } from "lucide-react";
+import { Download, ExternalLink, FlaskConical, Pencil, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ImageEditor, type EditorState } from "@/components/ImageEditor";
 import { AppHeader } from "@/components/AppHeader";
 import { MolecularBackground } from "@/components/MolecularBackground";
 import { ReactionArrow } from "@/components/ReactionArrow";
@@ -96,6 +97,9 @@ function Index() {
   const [showBanner, setShowBanner] = useState(true);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [regenUsed, setRegenUsed] = useState(0);
+  // Client-side editor: open flag plus canvas history kept for the session.
+  const [editing, setEditing] = useState(false);
+  const [editorState, setEditorState] = useState<EditorState | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
   const quotaReached = remaining <= 0;
@@ -156,6 +160,8 @@ function Index() {
     setIsFinal(false);
     setGenerationId(null);
     setRegenUsed(0);
+    setEditing(false);
+    setEditorState(null);
     outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     let finalImage: string | null = null;
     try {
@@ -199,6 +205,8 @@ function Index() {
     }
     setRegenerating(true);
     setIsFinal(false);
+    setEditing(false);
+    setEditorState(null);
 
     let finalImage: string | null = null;
     try {
@@ -391,6 +399,14 @@ function Index() {
                   <span className="text-xs text-muted-foreground">
                     {regenExhausted ? t("regen.exhausted") : t("regen.left", { n: regenRemaining })}
                   </span>
+                  <Button
+                    variant={editing ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setEditing((v) => !v)}
+                  >
+                    <Pencil className="size-4" aria-hidden />
+                    {t("output.edit")}
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleOpenFullRes}>
                     <ExternalLink className="size-4" aria-hidden />
                     {t("output.fullRes")}
@@ -403,23 +419,32 @@ function Index() {
               )}
             </div>
 
-            <div className="mt-3 flex min-h-[320px] items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-accent-strong/30 bg-muted/40">
-              {image ? (
-                <img
-                  src={image}
-                  alt={t("output.title")}
-                  className={`h-auto w-full transition-[filter] duration-500 ${
-                    isFinal ? "blur-0" : "blur-xl"
-                  }`}
-                />
-              ) : loading ? (
-                <LoadingState />
-              ) : (
-                <p className="px-6 py-12 text-center text-sm text-muted-foreground">
-                  {t("output.empty")}
-                </p>
-              )}
-            </div>
+            {image && isFinal && editing ? (
+              <ImageEditor
+                src={image}
+                state={editorState}
+                onStateChange={setEditorState}
+                onClose={() => setEditing(false)}
+              />
+            ) : (
+              <div className="mt-3 flex min-h-[320px] items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-accent-strong/30 bg-muted/40">
+                {image ? (
+                  <img
+                    src={image}
+                    alt={t("output.title")}
+                    className={`h-auto w-full transition-[filter] duration-500 ${
+                      isFinal ? "blur-0" : "blur-xl"
+                    }`}
+                  />
+                ) : loading ? (
+                  <LoadingState />
+                ) : (
+                  <p className="px-6 py-12 text-center text-sm text-muted-foreground">
+                    {t("output.empty")}
+                  </p>
+                )}
+              </div>
+            )}
             {!isGuest && (
               <p className="mt-2 text-xs text-muted-foreground">
                 {t("menu.plan.usage", { used, max: limit })}

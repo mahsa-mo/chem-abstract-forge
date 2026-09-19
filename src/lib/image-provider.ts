@@ -248,16 +248,29 @@ export async function generateImageWithCloudflare(prompt: string): Promise<Blob>
 
   const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell`;
 
-  let upstream: Response;
-  try {
-    upstream = await fetch(endpoint, {
+  // flux-1-schnell rejects very long prompts and its safety classifier
+  // false-positives ("NSFW content") on long scientific prompts, so send a
+  // trimmed prompt and retry once with a short, safe scientific prompt.
+  const call = (p: string) =>
+    fetch(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt: p }),
     });
+
+  const SAFE_FALLBACK_PROMPT =
+    "A clean scientific graphical abstract diagram for a chemistry journal: labelled molecular structures, reaction arrow, standard CPK atom colours (carbon grey, oxygen red, nitrogen blue), white background, flat vector style, no text paragraphs.";
+
+  let upstream: Response;
+  try {
+    upstream = await call(prompt.slice(0, 1400));
+    if (upstream.status === 400) {
+      console.error("[cloudflare] 400 on primary prompt, retrying with safe prompt");
+      upstream = await call(SAFE_FALLBACK_PROMPT);
+    }
   } catch (err) {
     throw new ProviderError(
       err instanceof Error ? err.message : "Network error contacting Cloudflare",

@@ -46,7 +46,7 @@ export function ImageEditor({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<Tool>("erase");
   const [brush, setBrush] = useState(28);
-  const [eraseToColor, setEraseToColor] = useState(false);
+  const [eraseToColor, setEraseToColor] = useState(true);
   const [bgColor, setBgColor] = useState("#ffffff");
   const [textValue, setTextValue] = useState("");
   const [fontSize, setFontSize] = useState(48);
@@ -387,7 +387,7 @@ export function ImageEditor({
         </Button>
       </div>
 
-      <div className="relative mt-3 overflow-hidden rounded-lg border border-border bg-[repeating-conic-gradient(var(--muted)_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]">
+      <div className="relative mt-3 overflow-hidden rounded-lg border border-border bg-white">
         <canvas
           ref={canvasRef}
           onPointerDown={onPointerDown}
@@ -407,3 +407,4 @@ export function ImageEditor({
     </div>
   );
 }
+

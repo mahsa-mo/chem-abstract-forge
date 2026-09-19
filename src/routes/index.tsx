@@ -160,6 +160,8 @@ function Index() {
     setIsFinal(false);
     setGenerationId(null);
     setRegenUsed(0);
+    setEditing(false);
+    setEditorState(null);
     outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     let finalImage: string | null = null;
     try {

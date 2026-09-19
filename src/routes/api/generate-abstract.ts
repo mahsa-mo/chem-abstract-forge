@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { buildAbstractPrompt } from "@/lib/abstract-prompt";
+import { buildAbstractPrompt, buildStructuredSceneDescription } from "@/lib/abstract-prompt";
 import { generateAbstractImage, ProviderError, type ProviderImageResult } from "@/lib/image-provider";
 
 
@@ -28,7 +28,8 @@ export const Route = createFileRoute("/api/generate-abstract")({
 
         let image: ProviderImageResult;
         try {
-          image = await generateAbstractImage(buildAbstractPrompt(text.slice(0, 4000)));
+          const sceneDescription = await buildStructuredSceneDescription(text.slice(0, 4000));
+          image = await generateAbstractImage(buildAbstractPrompt(sceneDescription));
         } catch (err) {
           console.error("Image generation failed:", err instanceof Error ? err.message : err);
           const status = err instanceof ProviderError ? err.status : 502;

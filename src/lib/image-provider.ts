@@ -79,14 +79,25 @@ export async function generateAbstractImage(prompt: string): Promise<ProviderIma
 
 async function generateWithPollinations(prompt: string): Promise<ProviderImageResult> {
   const seed = Math.floor(Math.random() * 1000000);
+  // Pollinations takes the prompt directly in the URL, so an overly long
+  // prompt (now much longer since buildAbstractPrompt includes the full
+  // structured scene description) can push the URL past server/CDN length
+  // limits and cause the request to fail outright. Cap it the same way as
+  // the Cloudflare fallback: prioritize the actual scene description over
+  // the generic style boilerplate, and keep the total short.
+  const shortPrompt = buildShortPrompt(prompt, 900);
   const url =
-    `${POLLINATIONS_ENDPOINT}/${encodeURIComponent(prompt)}` +
+    `${POLLINATIONS_ENDPOINT}/${encodeURIComponent(shortPrompt)}` +
     `?width=1024&height=1024&nologo=true&model=flux&seed=${seed}`;
 
   let upstream: Response;
   try {
     upstream = await fetch(url);
   } catch (err) {
+    console.error(
+      "[pollinations] network error:",
+      err instanceof Error ? err.message : err,
+    );
     throw new ProviderError(
       err instanceof Error ? err.message : "Network error contacting Pollinations",
       502,
@@ -95,6 +106,7 @@ async function generateWithPollinations(prompt: string): Promise<ProviderImageRe
 
   if (!upstream.ok) {
     const bodyText = await upstream.text().catch(() => "");
+    console.error("[pollinations] error response:", upstream.status, bodyText);
     throw new ProviderError(
       `Pollinations error (${upstream.status}): ${bodyText || "no details"}`,
       upstream.status,
@@ -119,6 +131,25 @@ async function generateWithPollinations(prompt: string): Promise<ProviderImageRe
     mimeType: upstream.headers.get("content-type") ?? "image/jpeg",
     provider: "pollinations" as const,
   };
+}
+
+/**
+ * Shared by Pollinations and Cloudflare: both have tight prompt-length
+ * limits. `buildAbstractPrompt` puts generic style text first and the
+ * actual chemistry-specific scene description last, so a naive slice cuts
+ * off the one part that says what to draw. This extracts the scene
+ * description and prioritizes it within the given character budget.
+ */
+function buildShortPrompt(fullPrompt: string, maxLen: number): string {
+  const SCENE_MARKER = "SCENE DESCRIPTION (the exact layout to draw):";
+  const idx = fullPrompt.indexOf(SCENE_MARKER);
+  if (idx === -1) return fullPrompt.slice(0, maxLen);
+  const scene = fullPrompt.slice(idx + SCENE_MARKER.length).trim();
+  const shortStylePrefix =
+    "Scientific chemistry graphical abstract, flat vector line-art, white background, " +
+    "left-to-right reaction scheme, standard atom colors (carbon grey, oxygen red, nitrogen blue, sulfur yellow). " +
+    "Depict exactly this, nothing else: ";
+  return (shortStylePrefix + scene).slice(0, maxLen);
 }
 
 /**
@@ -250,7 +281,8 @@ export async function generateImageWithCloudflare(prompt: string): Promise<Blob>
 
   // flux-1-schnell rejects very long prompts and its safety classifier
   // false-positives ("NSFW content") on long scientific prompts, so send a
-  // trimmed prompt and retry once with a short, safe scientific prompt.
+  // trimmed prompt (see buildShortPrompt above) and retry once with a short,
+  // safe scientific prompt.
   const call = (p: string) =>
     fetch(endpoint, {
       method: "POST",
@@ -266,7 +298,7 @@ export async function generateImageWithCloudflare(prompt: string): Promise<Blob>
 
   let upstream: Response;
   try {
-    upstream = await call(prompt.slice(0, 1400));
+    upstream = await call(buildShortPrompt(prompt, 1400));
     if (upstream.status === 400) {
       console.error("[cloudflare] 400 on primary prompt, retrying with safe prompt");
       upstream = await call(SAFE_FALLBACK_PROMPT);

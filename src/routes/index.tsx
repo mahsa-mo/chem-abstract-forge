@@ -97,6 +97,9 @@ function Index() {
   const [showBanner, setShowBanner] = useState(true);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [regenUsed, setRegenUsed] = useState(0);
+  // Client-side editor: open flag plus canvas history kept for the session.
+  const [editing, setEditing] = useState(false);
+  const [editorState, setEditorState] = useState<EditorState | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
   const quotaReached = remaining <= 0;

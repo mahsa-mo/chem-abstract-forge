@@ -205,6 +205,8 @@ function Index() {
     }
     setRegenerating(true);
     setIsFinal(false);
+    setEditing(false);
+    setEditorState(null);
 
     let finalImage: string | null = null;
     try {

@@ -39,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   loadRecentReactions,
   saveRecentReaction,
+  SAMPLE_HISTORIC_REACTIONS,
   type RecentReaction,
 } from "@/lib/recent-reactions";
 import { toast } from "sonner";

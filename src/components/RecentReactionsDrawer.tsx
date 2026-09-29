@@ -42,7 +42,7 @@ interface RecentReactionsDrawerProps {
   onOpenChange: (open: boolean) => void;
   onSelectReaction: (reaction: RecentReaction) => void;
   currentReactionId?: string | null;
-  userId?: string;
+  userId?: string | undefined;
   refreshTrigger?: number;
 }
 

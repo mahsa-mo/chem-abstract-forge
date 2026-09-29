@@ -54,7 +54,7 @@ function LanguageSwitcher() {
 
 type SavedAbstract = { id: string; title: string; created_at: string; url: string | null };
 
-function AccountMenu({ onOpenHistory }: { onOpenHistory?: () => void }) {
+function AccountMenu({ onOpenHistory }: { onOpenHistory?: (() => void) | undefined }) {
   const { t, locale } = useI18n();
   const { user, profile, signOut } = useAuth();
   const { used, limit } = useUsage();

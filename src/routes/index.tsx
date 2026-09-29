@@ -6,6 +6,7 @@ import {
   FlaskConical,
   Pencil,
   Sparkles,
+  Upload,
   X,
   Atom,
   Layers,
@@ -20,9 +21,10 @@ import {
   Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ImageEditor, type EditorState } from "@/components/ImageEditor";
+import { ImageEditor, type EditorState, type EditorTool } from "@/components/ImageEditor";
+import { EditingSuite } from "@/components/EditingSuite";
 import { AppHeader } from "@/components/AppHeader";
-import { ChemAbstractLogo } from "@/components/ChemAbstractLogo";
+import { FlaskLogo } from "@/components/FlaskLogo";
 import { TheFeelingSection, ColorPaletteInspector } from "@/components/DesignSystemShowcase";
 import { MolecularBackground } from "@/components/MolecularBackground";
 import { MolecularCanvas3D } from "@/components/MolecularCanvas3D";
@@ -152,7 +154,8 @@ async function saveAbstract(userId: string, dataUrl: string, text: string) {
 }
 
 function Index() {
-  const { t, dir } = useI18n();
+  const { t, dir, locale } = useI18n();
+  const isRtl = locale === "fa" || dir === "rtl";
   const { user, sessionError, retrySession, ensureSession } = useAuth();
   const { isGuest, used, limit, remaining, record } = useUsage();
   const [text, setText] = useState("");
@@ -166,8 +169,11 @@ function Index() {
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [regenUsed, setRegenUsed] = useState(0);
   const [editing, setEditing] = useState(false);
+  const [selectedEditorTool, setSelectedEditorTool] = useState<EditorTool>("pencil");
   const [editorState, setEditorState] = useState<EditorState | null>(null);
-  const [previewTab, setPreviewTab] = useState<"abstract" | "3d" | "guidelines">("abstract");
+  const [previewTab, setPreviewTab] = useState<"abstract" | "editor" | "3d" | "guidelines">(
+    "abstract",
+  );
   const [probedElement, setProbedElement] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyRefresh, setHistoryRefresh] = useState(0);
@@ -723,15 +729,6 @@ function Index() {
                     ({regenUsed}/3)
                   </span>
                   <Button
-                    variant={editing ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setEditing((v) => !v)}
-                    className="h-8 text-xs gap-1"
-                  >
-                    <Pencil className="size-3" aria-hidden />
-                    {t("output.edit")}
-                  </Button>
-                  <Button
                     variant="outline"
                     size="sm"
                     onClick={handleOpenFullRes}
@@ -751,25 +748,52 @@ function Index() {
                 </div>
               )}
 
-              {/* View Switcher when no image yet */}
-              {!image && !loading && (
-                <div className="flex items-center gap-1 bg-secondary/60 p-0.5 rounded-lg border border-border text-xs ms-auto">
+              {/* Universal View Switcher - ALWAYS VISIBLE: Abstract | Edit & Stationery Studio | 3D | Guidelines */}
+              {!loading && (
+                <div className="flex items-center gap-1 bg-secondary/80 p-0.5 rounded-lg border border-border text-xs ms-auto flex-wrap">
                   <button
                     type="button"
-                    onClick={() => setPreviewTab("abstract")}
+                    onClick={() => {
+                      setPreviewTab("abstract");
+                      setEditing(false);
+                    }}
                     className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-                      previewTab === "abstract"
+                      previewTab === "abstract" && !editing
                         ? "bg-card text-foreground shadow-xs border border-border/60"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    Abstract
+                    {t("output.title")}
                   </button>
+
+                  {/* PROMINENT EDIT & STATIONERY BOX TAB */}
                   <button
                     type="button"
-                    onClick={() => setPreviewTab("3d")}
+                    onClick={() => {
+                      setPreviewTab("editor");
+                      setEditing(true);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                      previewTab === "editor" || editing
+                        ? "bg-gradient-to-r from-[#4F46E5] to-[#06B6D4] text-white shadow-xs"
+                        : "text-[#4F46E5] dark:text-[#818CF8] bg-[#4F46E5]/15 hover:bg-[#4F46E5]/25 font-semibold border border-[#4F46E5]/30"
+                    }`}
+                  >
+                    <Pencil className="size-3.5" />
+                    <span>{isRtl ? "باکس ادیت و نوشت‌افزار" : "Edit & Stationery Studio"}</span>
+                    <span className="rounded-full bg-rose-500 text-white px-1.5 py-0.2 text-[9px] font-mono font-bold leading-none">
+                      {isRtl ? "ابزارها" : "NEW"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewTab("3d");
+                      setEditing(false);
+                    }}
                     className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-                      previewTab === "3d"
+                      previewTab === "3d" && !editing
                         ? "bg-card text-foreground shadow-xs border border-border/60"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
@@ -778,9 +802,12 @@ function Index() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPreviewTab("guidelines")}
+                    onClick={() => {
+                      setPreviewTab("guidelines");
+                      setEditing(false);
+                    }}
                     className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-                      previewTab === "guidelines"
+                      previewTab === "guidelines" && !editing
                         ? "bg-card text-foreground shadow-xs border border-border/60"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
@@ -792,12 +819,22 @@ function Index() {
             </div>
 
             {/* Display Viewport */}
-            {image && isFinal && editing ? (
+            {previewTab === "editor" || editing ? (
               <ImageEditor
-                src={image}
+                src={image || "blank"}
                 state={editorState}
+                initialTool={selectedEditorTool}
                 onStateChange={setEditorState}
-                onClose={() => setEditing(false)}
+                onClose={() => {
+                  setEditing(false);
+                  setPreviewTab("abstract");
+                }}
+                onSaveAsCurrent={(newImg) => {
+                  setImage(newImg);
+                  setIsFinal(true);
+                  setEditing(false);
+                  setPreviewTab("abstract");
+                }}
               />
             ) : image ? (
               <div className="flex flex-col gap-3">
@@ -809,12 +846,58 @@ function Index() {
                       isFinal ? "blur-0" : "blur-xl"
                     }`}
                   />
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 backdrop-blur-md rounded-md p-1 border border-border">
+
+                  {/* Vertical 'Editing Suite' with icon buttons for Pencil, Eraser, Selection, and Clear */}
+                  <EditingSuite
+                    activeTool={
+                      selectedEditorTool === "pencil"
+                        ? "pencil"
+                        : selectedEditorTool === "eraser"
+                          ? "eraser"
+                          : selectedEditorTool === "text-whiteout"
+                            ? "selection"
+                            : undefined
+                    }
+                    onSelectTool={(suiteTool) => {
+                      const toolName = suiteTool === "selection" ? "text-whiteout" : suiteTool;
+                      setSelectedEditorTool(toolName);
+                      setPreviewTab("editor");
+                      setEditing(true);
+                      toast.info(
+                        isRtl
+                          ? `ابزار ${suiteTool === "pencil" ? "مداد" : suiteTool === "eraser" ? "پاک‌کن" : "انتخاب و حذف کادر"} فعال شد`
+                          : `${suiteTool} tool armed`,
+                      );
+                    }}
+                    onClear={() => {
+                      if (editorState && editorState.history.length > 1) {
+                        setEditorState({ history: [editorState.history[0]!], index: 0 });
+                        toast.info(isRtl ? "ویرایش‌ها بازنشانی شدند" : "Edits cleared");
+                      } else {
+                        toast.info(isRtl ? "تغییری برای پاکسازی وجود ندارد" : "Nothing to clear");
+                      }
+                    }}
+                    onOpenFullSuite={() => {
+                      setPreviewTab("editor");
+                      setEditing(true);
+                    }}
+                  />
+
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity bg-background/85 backdrop-blur-md rounded-lg p-1 border border-border shadow-xs">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => setEditing(true)}
+                      className="h-7 text-xs gap-1.5 bg-[#4F46E5] hover:bg-[#4338CA] text-white font-medium"
+                    >
+                      <Pencil className="size-3" />
+                      {t("editor.stationery")}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={handleOpenFullRes}
-                      className="h-7 text-xs gap-1"
+                      className="h-7 text-xs gap-1 text-foreground"
                     >
                       <Maximize2 className="size-3" />
                       16:9 View
@@ -879,17 +962,103 @@ function Index() {
                 </div>
               </div>
             ) : (
-              /* The Empty State from the user's mockup with multi-color molecular logo */
-              <div className="flex flex-col items-center justify-center p-8 rounded-2xl border-2 border-dashed border-border/80 bg-card/40 min-h-[360px] text-center">
-                <div className="size-20 rounded-full bg-gradient-to-br from-[#4F46E5]/15 via-[#06B6D4]/15 to-[#EC4899]/15 border border-border/70 flex items-center justify-center mb-4 shadow-2xs">
-                  <ChemAbstractLogo className="size-11" />
+              /* The Empty State with the laboratory Flask mark */
+              <div className="relative flex flex-col items-center justify-center p-8 rounded-2xl border-2 border-dashed border-border/80 bg-card/40 min-h-[360px] text-center overflow-hidden">
+                {/* Vertical 'Editing Suite' with icon buttons for Pencil, Eraser, Selection, and Clear */}
+                <EditingSuite
+                  activeTool={
+                    selectedEditorTool === "pencil"
+                      ? "pencil"
+                      : selectedEditorTool === "eraser"
+                        ? "eraser"
+                        : selectedEditorTool === "text-whiteout"
+                          ? "selection"
+                          : undefined
+                  }
+                  onSelectTool={(suiteTool) => {
+                    const toolName = suiteTool === "selection" ? "text-whiteout" : suiteTool;
+                    setSelectedEditorTool(toolName);
+                    setPreviewTab("editor");
+                    setEditing(true);
+                  }}
+                  onClear={() => {
+                    toast.info(isRtl ? "بوم خالی آماده است" : "Blank canvas ready");
+                  }}
+                  onOpenFullSuite={() => {
+                    setPreviewTab("editor");
+                    setEditing(true);
+                  }}
+                />
+
+                <div
+                  suppressHydrationWarning
+                  className="size-20 rounded-full bg-gradient-to-br from-[#FF758C]/25 via-[#FF7EB3]/20 to-[#38BDF8]/25 border border-pink-400/30 flex items-center justify-center mb-4 shadow-sm"
+                >
+                  <FlaskLogo className="size-11" />
                 </div>
                 <p className="font-bold text-foreground text-sm max-w-xs">{t("output.empty")}</p>
                 <p className="mt-1.5 text-xs text-muted-foreground max-w-sm leading-relaxed">
                   Enter your chemistry text or reaction description on the left and generate your
-                  publication-ready graphic.
+                  publication-ready graphic, or enter the edit studio directly.
                 </p>
-                <div className="mt-5 flex items-center gap-2">
+
+                {/* Direct Action Buttons to enter the Edit Studio or Upload right from empty state */}
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setPreviewTab("editor");
+                      setEditing(true);
+                    }}
+                    className="gap-2 bg-gradient-to-r from-[#4F46E5] to-[#06B6D4] text-white font-bold text-xs h-9 px-4 shadow-sm hover:opacity-95"
+                  >
+                    <Pencil className="size-3.5" />
+                    <span>
+                      {isRtl
+                        ? "ورود به باکس ادیت و نوشت‌افزار (بوم نقاشی و شیمی)"
+                        : "Open Edit & Stationery Box"}
+                    </span>
+                  </Button>
+
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-secondary/80 hover:bg-secondary px-3 py-2 text-xs font-medium text-foreground transition-colors shadow-2xs">
+                    <Upload className="size-3.5 text-[#06B6D4]" />
+                    <span>{isRtl ? "بارگذاری عکس برای ادیت" : "Upload Image to Edit"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const dataUrl = ev.target?.result as string;
+                          if (dataUrl) {
+                            setImage(dataUrl);
+                            setIsFinal(true);
+                            setPreviewTab("editor");
+                            setEditing(true);
+                            toast.success(
+                              isRtl ? "تصویر با موفقیت بارگذاری شد" : "Image loaded for editing",
+                            );
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleSelectReaction(RECENT_EXAMPLES[0]!)}
+                    className="text-xs h-9"
+                  >
+                    {isRtl ? "تست با نمونه آماده" : "Test with Sample"}
+                  </Button>
+                </div>
+
+                <div className="mt-4 flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setPreviewTab("3d")}

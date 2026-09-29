@@ -23,7 +23,7 @@ import { useI18n, locales, type Locale } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { useUsage } from "@/lib/use-usage";
 import { supabase } from "@/integrations/supabase/client";
-import { ChemAbstractLogo } from "@/components/ChemAbstractLogo";
+import { FlaskLogo } from "@/components/FlaskLogo";
 
 function LanguageSwitcher() {
   const { locale, setLocale, t } = useI18n();
@@ -212,9 +212,9 @@ export function AppHeader({
     <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-md border-b border-border/80 text-foreground shadow-xs">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
         <Link to="/" className="flex items-center gap-2.5 group">
-          <ChemAbstractLogo className="size-9 transition-transform group-hover:scale-105" />
+          <FlaskLogo />
           <div>
-            <span className="block font-display text-base font-extrabold tracking-tight text-foreground group-hover:text-[#4F46E5] dark:group-hover:text-[#818CF8] transition-colors">
+            <span className="block font-display text-base font-extrabold tracking-tight text-foreground group-hover:text-[#F43F5E] dark:group-hover:text-[#FB7185] transition-colors">
               {t("app.name")}
             </span>
             <span className="hidden text-[11px] text-muted-foreground sm:block leading-none font-medium">

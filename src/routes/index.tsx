@@ -39,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   loadRecentReactions,
   saveRecentReaction,
+  SAMPLE_HISTORIC_REACTIONS,
   type RecentReaction,
 } from "@/lib/recent-reactions";
 import { toast } from "sonner";
@@ -1051,7 +1052,7 @@ function Index() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => handleSelectReaction(RECENT_EXAMPLES[0]!)}
+                    onClick={() => handleSelectReaction(SAMPLE_HISTORIC_REACTIONS[0]!)}
                     className="text-xs h-9"
                   >
                     {isRtl ? "تست با نمونه آماده" : "Test with Sample"}

@@ -519,9 +519,9 @@ export function MolecularWorkspaceViewer3D({
       } else {
         raycaster.setFromCamera(mouse, camera);
         const intersects = raycaster.intersectObjects(molGroup.children, true);
-        const atomHit = intersects.find((hit) => hit.object.userData?.atomData);
+        const atomHit = intersects.find((hit) => hit.object.userData?.['atomData']);
         if (atomHit) {
-          const data = atomHit.object.userData.atomData as MoleculeDef["atoms"][0];
+          const data = atomHit.object.userData['atomData'] as MoleculeDef["atoms"][0];
           setHoveredAtom(data);
           onProbeElement?.(data.element);
         } else {

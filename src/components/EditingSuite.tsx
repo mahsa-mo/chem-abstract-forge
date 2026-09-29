@@ -5,7 +5,7 @@ import { useI18n } from "@/lib/i18n";
 export type EditingSuiteTool = "pencil" | "eraser" | "selection";
 
 export interface EditingSuiteProps {
-  activeTool?: EditingSuiteTool | string;
+  activeTool?: EditingSuiteTool | string | undefined;
   onSelectTool: (tool: EditingSuiteTool) => void;
   onClear: () => void;
   onOpenFullSuite?: () => void;

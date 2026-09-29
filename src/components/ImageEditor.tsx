@@ -191,7 +191,9 @@ export function ImageEditor({
     const tmp = document.createElement("canvas");
     tmp.width = w;
     tmp.height = h;
-    tmp.getContext("2d")!.drawImage(canvas, Math.round(crop.x), Math.round(crop.y), w, h, 0, 0, w, h);
+    tmp
+      .getContext("2d")!
+      .drawImage(canvas, Math.round(crop.x), Math.round(crop.y), w, h, 0, 0, w, h);
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d")!;
@@ -258,16 +260,29 @@ export function ImageEditor({
           <Eraser className="size-4" aria-hidden />
           {t("editor.erase")}
         </Button>
-        <Button size="sm" variant={tool === "text" ? "default" : "outline"} onClick={() => setTool("text")}>
+        <Button
+          size="sm"
+          variant={tool === "text" ? "default" : "outline"}
+          onClick={() => setTool("text")}
+        >
           <Type className="size-4" aria-hidden />
           {t("editor.text")}
         </Button>
-        <Button size="sm" variant={tool === "crop" ? "default" : "outline"} onClick={() => setTool("crop")}>
+        <Button
+          size="sm"
+          variant={tool === "crop" ? "default" : "outline"}
+          onClick={() => setTool("crop")}
+        >
           <Crop className="size-4" aria-hidden />
           {t("editor.crop")}
         </Button>
         <span className="mx-1 h-6 w-px bg-border" />
-        <Button size="sm" variant="outline" disabled={index <= 0} onClick={() => void step(index - 1)}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={index <= 0}
+          onClick={() => void step(index - 1)}
+        >
           <Undo2 className="size-4" aria-hidden />
           {t("editor.undo")}
         </Button>
@@ -407,4 +422,3 @@ export function ImageEditor({
     </div>
   );
 }
-

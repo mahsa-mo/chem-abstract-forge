@@ -34,7 +34,11 @@ type AuthCtx = {
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signInWithGoogle: () => Promise<{ error?: string }>;
   linkWithGoogle: () => Promise<{ error?: string }>;
-  convertToPermanent: (email: string, password: string, name: string) => Promise<{ error?: string }>;
+  convertToPermanent: (
+    email: string,
+    password: string,
+    name: string,
+  ) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
 };
 
@@ -43,11 +47,11 @@ const Ctx = createContext<AuthCtx | null>(null);
 /** Startup validation of the browser-safe backend config, with clear diagnostics. */
 function validateEnv(): string | null {
   const url =
-    import.meta.env['VITE_SUPABASE_URL'] ||
-    (import.meta.env['VITE_SUPABASE_PROJECT_ID']
-      ? `https://${import.meta.env['VITE_SUPABASE_PROJECT_ID']}.supabase.co`
+    import.meta.env["VITE_SUPABASE_URL"] ||
+    (import.meta.env["VITE_SUPABASE_PROJECT_ID"]
+      ? `https://${import.meta.env["VITE_SUPABASE_PROJECT_ID"]}.supabase.co`
       : undefined);
-  const key = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'];
+  const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
   const missing: string[] = [];
   if (!url) missing.push("VITE_SUPABASE_URL");
   if (!key) missing.push("VITE_SUPABASE_PUBLISHABLE_KEY");
@@ -108,7 +112,6 @@ async function ensureAnonymousSession(onError: (msg: string | null) => void): Pr
   })();
   return anonSignInInFlight;
 }
-
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -183,7 +186,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootstrap]);
 
-
   const userId = session?.user.id;
 
   useEffect(() => {
@@ -239,18 +241,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {};
   }, []);
 
-  const convertToPermanent = useCallback(
-    async (email: string, password: string, name: string) => {
-      const { error } = await supabase.auth.updateUser({
-        email,
-        password,
-        data: { full_name: name },
-      });
-      if (error) return { error: error.message };
-      return {};
-    },
-    [],
-  );
+  const convertToPermanent = useCallback(async (email: string, password: string, name: string) => {
+    const { error } = await supabase.auth.updateUser({
+      email,
+      password,
+      data: { full_name: name },
+    });
+    if (error) return { error: error.message };
+    return {};
+  }, []);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
@@ -309,7 +308,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
     ],
   );
-
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -23,7 +23,6 @@ export type ProviderImageResult = {
   provider: "gemini" | "pollinations" | "cloudflare";
 };
 
-
 export class ProviderError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -94,10 +93,7 @@ async function generateWithPollinations(prompt: string): Promise<ProviderImageRe
   try {
     upstream = await fetch(url);
   } catch (err) {
-    console.error(
-      "[pollinations] network error:",
-      err instanceof Error ? err.message : err,
-    );
+    console.error("[pollinations] network error:", err instanceof Error ? err.message : err);
     throw new ProviderError(
       err instanceof Error ? err.message : "Network error contacting Pollinations",
       502,
@@ -191,7 +187,6 @@ export async function generateAbstractImageViaGemini(prompt: string): Promise<Pr
       upstream.status,
     );
   }
-
 
   const json = (await upstream.json()) as {
     candidates?: {
@@ -327,10 +322,7 @@ export async function generateImageWithCloudflare(prompt: string): Promise<Blob>
   const imageB64 = json.result?.image;
   if (!imageB64) {
     const cfErrors = json.errors?.map((e) => e.message).join(", ") || "no details";
-    throw new ProviderError(
-      `Cloudflare response contained no image data (${cfErrors})`,
-      502,
-    );
+    throw new ProviderError(`Cloudflare response contained no image data (${cfErrors})`, 502);
   }
 
   const binary = Buffer.from(imageB64, "base64");

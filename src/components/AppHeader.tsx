@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronDown, Languages, LogIn, LogOut, Mail, Sparkles } from "lucide-react";
+import {
+  ChevronDown,
+  History,
+  Languages,
+  LogIn,
+  LogOut,
+  Mail,
+  Sparkles,
+  BookOpen,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -14,26 +23,26 @@ import { useI18n, locales, type Locale } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { useUsage } from "@/lib/use-usage";
 import { supabase } from "@/integrations/supabase/client";
-import { FlaskLogo } from "@/components/FlaskLogo";
+import { ChemAbstractLogo } from "@/components/ChemAbstractLogo";
 
 function LanguageSwitcher() {
   const { locale, setLocale, t } = useI18n();
   return (
     <div
-      className="flex items-center gap-1 rounded-full border border-white/15 bg-white/10 p-1"
+      className="flex items-center gap-0.5 rounded-full border border-border/80 bg-secondary/60 p-0.5 shadow-2xs"
       role="group"
       aria-label={t("lang.switch")}
     >
-      <Languages className="mx-1 size-4 text-primary-foreground/70" aria-hidden />
+      <Languages className="mx-1.5 size-3.5 text-muted-foreground" aria-hidden />
       {locales.map((l) => (
         <button
           key={l.code}
           onClick={() => setLocale(l.code as Locale)}
           aria-pressed={locale === l.code}
-          className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition-all ${
             locale === l.code
-              ? "bg-primary-foreground text-primary"
-              : "text-primary-foreground/75 hover:bg-white/10"
+              ? "bg-card text-foreground shadow-2xs border border-border/60"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           {l.label}
@@ -45,7 +54,7 @@ function LanguageSwitcher() {
 
 type SavedAbstract = { id: string; title: string; created_at: string; url: string | null };
 
-function AccountMenu() {
+function AccountMenu({ onOpenHistory }: { onOpenHistory?: () => void }) {
   const { t, locale } = useI18n();
   const { user, profile, signOut } = useAuth();
   const { used, limit } = useUsage();
@@ -99,22 +108,39 @@ function AccountMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 p-0">
         <section className="p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {t("menu.projects")}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("menu.projects")}
+            </p>
+            {onOpenHistory && (
+              <button
+                type="button"
+                onClick={onOpenHistory}
+                className="text-[11px] font-medium text-accent-strong hover:underline"
+              >
+                {t("history.title")}
+              </button>
+            )}
+          </div>
           <ul className="mt-2 space-y-2">
             {items.length === 0 && (
               <li className="text-sm text-muted-foreground">{t("menu.projects.empty")}</li>
             )}
             {items.map((it) => (
-              <li key={it.id} className="flex items-center gap-2">
+              <li
+                key={it.id}
+                className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded-md transition-colors"
+                onClick={onOpenHistory}
+              >
                 <span className="size-10 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
                   {it.url && <img src={it.url} alt="" className="size-full object-cover" />}
                 </span>
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm text-foreground">{it.title}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {new Date(it.created_at).toLocaleDateString(locale === "fa" ? "fa-IR" : "en-US")}
+                    {new Date(it.created_at).toLocaleDateString(
+                      locale === "fa" ? "fa-IR" : "en-US",
+                    )}
                   </span>
                 </span>
               </li>
@@ -172,57 +198,80 @@ function AccountMenu() {
   );
 }
 
-export function AppHeader() {
+export function AppHeader({
+  onOpenHistory,
+  historyCount = 0,
+}: {
+  onOpenHistory?: () => void;
+  historyCount?: number;
+}) {
   const { t } = useI18n();
   const { user, loading, signInWithGoogle } = useAuth();
 
   return (
-    <header className="bg-header text-primary-foreground">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-        <Link to="/" className="flex items-center gap-3">
-          <FlaskLogo />
-          <span>
-            <span className="block font-display text-base font-bold tracking-tight">
-            {t("app.name")}
-          </span>
-            <span className="hidden text-xs text-primary-foreground/70 sm:block">
+    <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-md border-b border-border/80 text-foreground shadow-xs">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
+        <Link to="/" className="flex items-center gap-2.5 group">
+          <ChemAbstractLogo className="size-9 transition-transform group-hover:scale-105" />
+          <div>
+            <span className="block font-display text-base font-extrabold tracking-tight text-foreground group-hover:text-[#4F46E5] dark:group-hover:text-[#818CF8] transition-colors">
+              {t("app.name")}
+            </span>
+            <span className="hidden text-[11px] text-muted-foreground sm:block leading-none font-medium">
               {t("app.tagline")}
             </span>
-          </span>
+          </div>
         </Link>
 
-        <nav className="ms-auto flex items-center gap-2">
+        <nav className="flex items-center gap-2.5 sm:gap-3">
+          {onOpenHistory && (
+            <button
+              type="button"
+              onClick={onOpenHistory}
+              className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1 rounded-md hover:bg-secondary/60"
+            >
+              <History className="size-3.5 text-[#06B6D4]" />
+              <span>{t("history.title")}</span>
+              {historyCount > 0 && (
+                <span className="ms-0.5 rounded-full bg-[#06B6D4]/15 px-1.5 py-0.2 text-[10px] font-mono font-semibold text-[#06B6D4] border border-[#06B6D4]/30">
+                  {historyCount}
+                </span>
+              )}
+            </button>
+          )}
+
           <Link
             to="/pricing"
-            className="rounded-full px-3 py-1.5 text-sm font-medium text-primary-foreground/80 transition-colors hover:bg-white/10 hover:text-primary-foreground"
+            className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             {t("nav.pricing")}
           </Link>
+
           <LanguageSwitcher />
+
           {user && !loading ? (
-            <AccountMenu />
+            <AccountMenu onOpenHistory={onOpenHistory} />
           ) : (
-            <span className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                variant="secondary"
+                variant="outline"
                 onClick={() => void signInWithGoogle()}
-                className="gap-1.5"
+                className="gap-1.5 h-8 text-xs font-semibold border-border/80 hover:bg-secondary/80"
               >
-                <LogIn className="size-4" aria-hidden />
+                <LogIn className="size-3.5 text-[#4F46E5]" aria-hidden />
                 {t("auth.signIn")}
               </Button>
               <Button
                 asChild
-                variant="ghost"
                 size="sm"
-                className="hidden text-primary-foreground hover:bg-white/10 hover:text-primary-foreground sm:inline-flex"
+                className="hidden sm:inline-flex h-8 text-xs font-semibold bg-gradient-to-r from-[#4F46E5] to-[#06B6D4] text-white shadow-xs hover:opacity-95"
               >
                 <Link to="/auth" search={{ mode: "signup" }}>
                   {t("auth.signUp")}
                 </Link>
               </Button>
-            </span>
+            </div>
           )}
         </nav>
       </div>

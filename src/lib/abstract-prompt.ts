@@ -56,7 +56,10 @@ export async function buildStructuredSceneDescription(text: string): Promise<str
     const json = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     };
-    const description = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim();
+    const description = json.candidates?.[0]?.content?.parts
+      ?.map((p) => p.text ?? "")
+      .join("")
+      .trim();
 
     if (!description) {
       console.error("[abstract-prompt] scene description response was empty");

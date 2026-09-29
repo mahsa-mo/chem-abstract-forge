@@ -34,7 +34,8 @@ export async function streamAbstract(
       if (event.event === "error" || payload?.type === "error") {
         sawAnyEvent = true;
         streamError =
-          (payload as { error?: { message?: string } })?.error?.message ?? "Image generation failed";
+          (payload as { error?: { message?: string } })?.error?.message ??
+          "Image generation failed";
         return;
       }
       if (

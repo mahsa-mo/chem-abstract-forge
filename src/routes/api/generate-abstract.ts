@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { buildAbstractPrompt, buildStructuredSceneDescription } from "@/lib/abstract-prompt";
-import { generateAbstractImage, ProviderError, type ProviderImageResult } from "@/lib/image-provider";
-
+import {
+  generateAbstractImage,
+  ProviderError,
+  type ProviderImageResult,
+} from "@/lib/image-provider";
 
 /**
  * Swappable image-generation endpoint.
@@ -48,7 +51,6 @@ export const Route = createFileRoute("/api/generate-abstract")({
           });
         }
 
-
         // Emit a single "completed" SSE event — Gemini returns the finished
         // image in one shot, so there are no incremental "partial_image"
         // frames to forward. The frontend already treats a lone completed
@@ -75,7 +77,6 @@ export const Route = createFileRoute("/api/generate-abstract")({
             "X-Image-Bytes": String(image.b64_json.length),
           },
         });
-
       },
     },
   },

@@ -1,3 +1,4 @@
+import { MolecularCanvas3D } from "@/components/MolecularCanvas3D";
 import { MolecularBackground } from "@/components/MolecularBackground";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -13,7 +14,7 @@ type Search = { mode?: "signin" | "signup" };
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (search: Record<string, unknown>): Search => ({
-    mode: search['mode'] === "signup" ? "signup" : "signin",
+    mode: search["mode"] === "signup" ? "signup" : "signin",
   }),
   head: () => ({
     meta: [
@@ -39,7 +40,15 @@ function AuthPage() {
   const { mode } = Route.useSearch();
   const { t, dir } = useI18n();
   const navigate = useNavigate();
-  const { user, signIn, signUp, signInWithGoogle, isAnonymous, linkWithGoogle, convertToPermanent } = useAuth();
+  const {
+    user,
+    signIn,
+    signUp,
+    signInWithGoogle,
+    isAnonymous,
+    linkWithGoogle,
+    convertToPermanent,
+  } = useAuth();
   const isSignUp = mode === "signup";
 
   const [name, setName] = useState("");
@@ -79,16 +88,17 @@ function AuthPage() {
 
   return (
     <div className="relative min-h-screen font-sans" dir={dir}>
+      <MolecularCanvas3D />
       <MolecularBackground />
       <AppHeader />
-      <main className="mx-auto max-w-md px-4 py-10 sm:px-6">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+      <main className="mx-auto max-w-md px-4 py-12 sm:px-6">
+        <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground text-center">
           {isSignUp ? t("auth.title.signUp") : t("auth.title.signIn")}
         </h1>
 
         <form
           onSubmit={submit}
-          className="mt-5 space-y-4 rounded-2xl border border-border bg-card p-5 shadow-card"
+          className="mt-6 space-y-4 rounded-2xl border border-border/80 bg-card/90 backdrop-blur-md p-6 shadow-card"
         >
           {isSignUp && (
             <div className="space-y-1.5">

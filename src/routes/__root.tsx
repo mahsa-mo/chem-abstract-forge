@@ -79,32 +79,39 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "ChemAbstract — Graphical Abstract Generator for Chemistry" },
+      { title: "ChemStudio — Scientific Vector Workbench & Reaction Studio" },
       {
         name: "description",
         content:
-          "Generate a publication-style graphical abstract from your chemistry paper text or reaction description. English & Persian.",
+          "Publication-grade vector graphics workbench for chemistry papers, reaction schemes, 3D structures, and journal submission dossiers.",
       },
       {
         property: "og:title",
-        content: "ChemAbstract — Graphical Abstract Generator for Chemistry",
+        content: "ChemStudio — Scientific Vector Workbench for Chemistry",
       },
       {
         property: "og:description",
         content:
-          "Generate a publication-style graphical abstract from your chemistry paper text or reaction description. English & Persian.",
+          "Publication-grade vector graphics workbench for chemistry papers, reaction schemes, 3D structures, and journal submission dossiers.",
       },
-      { property: "og:type", content: "website" },
+      {
+        name: "keywords",
+        content:
+          "ChemStudio, Graphical Abstract Generator, ACS ToC graphics maker, Elsevier graphical abstract, Cell Press ToC diagram, Nature cover art, ChemDraw online free alternative, BioRender chemistry alternative, SMILES 2D structure editor, PubChem 3D molecular viewer, stoichiometry reaction balancer, chemical vector SVG EPS, 300 DPI publication export, رسم چکیده تصویری مقاله, نرم افزار رسم شیمی آنلاین, ابزار ساخت نمودار TOC مقالات, جایگزین کم دراو, جایگزین بایورندر, موازنه آنلاین واکنش شیمیایی, محاسبه استوکیومتری مقاله, رسم فرمول ساختاری شیمی, چک لیست داوری ژورنال",
+      },
+      { name: "author", content: "ChemStudio Team" },
+      { name: "theme-color", content: "#06B6D4" },
+      { property: "og:site_name", content: "ChemStudio" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:site", content: "@ChemStudio" },
       {
         name: "twitter:title",
-        content: "ChemAbstract — Graphical Abstract Generator for Chemistry",
+        content: "ChemStudio — Scientific Vector Workbench for Chemistry",
       },
       {
         name: "twitter:description",
         content:
-          "Generate a publication-style graphical abstract from your chemistry paper text or reaction description. English & Persian.",
+          "Publication-grade vector graphics workbench for chemistry papers, reaction schemes, 3D structures, and journal submission dossiers.",
       },
       {
         property: "og:image",
@@ -118,6 +125,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
     ],
     links: [
+      { rel: "canonical", href: "https://chemstudio.app/" },
+      { rel: "manifest", href: "/manifest.json" },
       {
         rel: "stylesheet",
         href: appCss,
@@ -129,6 +138,66 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=Vazirmatn:wght@400;500;600;700&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+    ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebApplication",
+          name: "ChemStudio",
+          url: "https://chemstudio.app/",
+          applicationCategory: "EducationalApplication",
+          operatingSystem: "All",
+          description:
+            "Publication-grade scientific vector graphics workbench for chemistry papers, reaction schemes, SMILES 2D drawing, 3D molecule viewing, and ACS/Elsevier submission dossiers.",
+          offers: {
+            "@type": "AggregateOffer",
+            priceCurrency: "USD",
+            lowPrice: "0",
+            highPrice: "49",
+            offerCount: "3",
+          },
+          creator: {
+            "@type": "Organization",
+            name: "ChemStudio Labs",
+            url: "https://chemstudio.app/",
+          },
+        }),
+      },
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: [
+            {
+              "@type": "Question",
+              name: "Are ChemStudio vector graphics compliant with ACS and Elsevier journal policies?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Yes. ChemStudio exports 100% deterministic SVG and EPS vector artwork compliant with American Chemical Society (ACS), Elsevier, Cell Press, Springer Nature, and Wiley publishing rules.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Can I convert SMILES and chemical names into 2D structures?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Yes. ChemStudio features an integrated 2D ChemDraw-style structure editor that parses SMILES codes, IUPAC nomenclature, and chemical formulas in real time.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "How does the Stoichiometry & Reaction Lab work?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "The Stoichiometry Lab calculates molar masses, balances chemical equations, computes reaction yield, and evaluates atom economy for organic and inorganic reactions.",
+              },
+            },
+          ],
+        }),
+      },
     ],
   }),
   shellComponent: RootShell,

@@ -1,28 +1,52 @@
+import fs from "node:fs";
 import { createFileRoute } from "@tanstack/react-router";
 import { buildAbstractPrompt, buildStructuredSceneDescription } from "@/lib/abstract-prompt";
+import type { JournalId, ColorSchemeId } from "@/lib/journal-standards";
 import {
   generateAbstractImage,
   ProviderError,
   type ProviderImageResult,
 } from "@/lib/image-provider";
 
-/**
- * Swappable image-generation endpoint.
- * The AI provider itself lives in `src/lib/image-provider.ts` — this route
- * only builds the prompt, calls that provider, and shapes the response into
- * the exact contract the frontend (`src/lib/streamImage.ts`) already expects.
- * Nothing in the frontend needs to change when the provider changes.
- */
 export const Route = createFileRoute("/api/generate-abstract")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const { text, stream = true } = (await request.json()) as {
+        const {
+          text,
+          stream = true,
+          journal = "acs",
+          colorScheme = "academic-clean",
+        } = (await request.json()) as {
           text?: string;
           stream?: boolean;
+          journal?: JournalId;
+          colorScheme?: ColorSchemeId;
         };
 
-        if (!text || text.trim().length < 40) {
+        if (text) {
+          try {
+            fs.writeFileSync(
+              "/tmp/recent-inputs.log",
+              `[${new Date().toISOString()}] (len: ${text.length})\n${text}\n----------------------------------------\n`,
+              { flag: "a" },
+            );
+            fs.writeFileSync(
+              "./user-inputs.log",
+              `\n[GENERATE ${new Date().toISOString()}] (len: ${text.length})\n${text}\n`,
+              { flag: "a" },
+            );
+            fs.writeFileSync(
+              "/tmp/user-input.log",
+              `\n[GENERATE ${new Date().toISOString()}] (len: ${text.length})\n${text}\n`,
+              { flag: "a" },
+            );
+          } catch {
+            /* ignore */
+          }
+        }
+
+        if (!text || text.trim().length < 3) {
           return new Response(JSON.stringify({ error: "text_too_short" }), {
             status: 400,
             headers: { "Content-Type": "application/json" },
@@ -31,8 +55,7 @@ export const Route = createFileRoute("/api/generate-abstract")({
 
         let image: ProviderImageResult;
         try {
-          const sceneDescription = await buildStructuredSceneDescription(text.slice(0, 4000));
-          image = await generateAbstractImage(buildAbstractPrompt(sceneDescription));
+          image = await generateAbstractImage(text, { text, journal, colorScheme });
         } catch (err) {
           console.error("Image generation failed:", err instanceof Error ? err.message : err);
           const status = err instanceof ProviderError ? err.status : 502;
@@ -46,21 +69,28 @@ export const Route = createFileRoute("/api/generate-abstract")({
         };
 
         if (!stream) {
-          return new Response(JSON.stringify({ data: [{ b64_json: image.b64_json }] }), {
-            headers: imageHeaders,
-          });
+          return new Response(
+            JSON.stringify({
+              data: [
+                {
+                  b64_json: image.b64_json,
+                  mimeType: image.mimeType,
+                  provider: image.provider,
+                },
+              ],
+            }),
+            { headers: imageHeaders },
+          );
         }
 
-        // Emit a single "completed" SSE event — Gemini returns the finished
-        // image in one shot, so there are no incremental "partial_image"
-        // frames to forward. The frontend already treats a lone completed
-        // event as a valid, successful stream (see streamImage.ts).
         const encoder = new TextEncoder();
         const body = new ReadableStream({
           start(controller) {
             const payload = JSON.stringify({
               type: "image_generation.completed",
               b64_json: image.b64_json,
+              mimeType: image.mimeType,
+              provider: image.provider,
             });
             controller.enqueue(
               encoder.encode(`event: image_generation.completed\ndata: ${payload}\n\n`),

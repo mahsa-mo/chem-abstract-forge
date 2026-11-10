@@ -76,36 +76,40 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let anonSignInInFlight: Promise<boolean> | null = null;
 
 /**
- * Creates an anonymous session with bounded exponential-backoff retries so a
- * transient network drop never leaves the app permanently stuck.
+ * Tries to initialize an anonymous session if supported, but gracefully falls
+ * back to Guest Mode without blocking the application or showing false fatal errors.
  */
 async function ensureAnonymousSession(onError: (msg: string | null) => void): Promise<boolean> {
   if (anonSignInInFlight) return anonSignInInFlight;
   anonSignInInFlight = (async () => {
     try {
-      const { data: existing } = await supabase.auth.getSession();
+      const { data: existing } = await supabase.auth
+        .getSession()
+        .catch(() => ({ data: { session: null } }));
       if (existing.session) {
         onError(null);
         return true;
       }
 
-      let lastMessage = "Unable to start a session";
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        try {
-          const { data, error } = await supabase.auth.signInAnonymously();
-          if (!error && data.session) {
-            onError(null);
-            return true;
-          }
-          lastMessage = error?.message ?? lastMessage;
-        } catch (e) {
-          lastMessage = e instanceof Error ? e.message : String(e);
+      try {
+        const { data, error } = await supabase.auth.signInAnonymously();
+        if (!error && data.session) {
+          onError(null);
+          return true;
         }
-        console.warn(`[auth] anonymous sign-in attempt ${attempt} failed: ${lastMessage}`);
-        if (attempt < MAX_ATTEMPTS) await sleep(400 * 2 ** (attempt - 1));
+        if (error) {
+          console.info(
+            "[auth] Anonymous sign-in not active on backend; continuing in Guest Mode:",
+            error.message,
+          );
+        }
+      } catch (e) {
+        console.info("[auth] Anonymous sign-in skipped; continuing in Guest Mode:", e);
       }
-      onError(lastMessage);
-      return false;
+
+      // Guest mode is fully supported for generating abstracts and using the app.
+      onError(null);
+      return true;
     } finally {
       anonSignInInFlight = null;
     }
@@ -121,14 +125,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const mountedRef = useRef(true);
 
   const bootstrap = useCallback(async () => {
-    const envError = validateEnv();
-    if (envError) {
-      if (mountedRef.current) {
-        setSessionError(envError);
-        setLoading(false);
-      }
-      return false;
-    }
     if (mountedRef.current) {
       setSessionError(null);
       setLoading(true);

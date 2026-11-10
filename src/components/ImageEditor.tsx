@@ -97,14 +97,14 @@ export function ImageEditor({
   onClose: () => void;
   onSaveAsCurrent?: (dataUrl: string) => void;
 }) {
-  const { t, locale } = useI18n();
-  const isRtl = locale === "fa";
+  const { t, locale, isRtl, l } = useI18n();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Active Tool State
   const [tool, setTool] = useState<EditorTool>(initialTool);
+  const [toolsPopoverOpen, setToolsPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (initialTool) {
@@ -612,531 +612,590 @@ export function ImageEditor({
   return (
     <div
       ref={containerRef}
-      className="mt-3 flex flex-col lg:flex-row gap-4 rounded-2xl border border-accent-strong/40 bg-card/95 backdrop-blur-md p-3.5 sm:p-4 shadow-lg"
+      className="relative mt-2 flex flex-col gap-2.5 rounded-2xl border border-accent-strong/40 bg-card/95 backdrop-blur-md p-2.5 sm:p-3 shadow-lg"
     >
-      {/* =========================================================================
-          STATIONERY & EDIT BOX (باکس ابزار ادیت و نوشت‌افزار) - Side Dock
-          ========================================================================= */}
-      <aside className="w-full lg:w-76 xl:w-80 shrink-0 flex flex-col gap-3.5 rounded-xl border border-border/80 bg-background/90 p-3.5 shadow-sm">
-        {/* Toolbox Header */}
-        <div className="flex items-center justify-between border-b border-border/70 pb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full bg-[#F43F5E] animate-pulse" />
-            <h3 className="font-display text-xs sm:text-sm font-bold text-foreground">
-              {t("editor.stationery")}
-            </h3>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="size-7"
-              disabled={index <= 0}
-              onClick={() => void step(index - 1)}
-              title={t("editor.undo")}
-            >
-              <Undo2 className="size-3.5" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="size-7"
-              disabled={index >= history.length - 1}
-              onClick={() => void step(index + 1)}
-              title={t("editor.redo")}
-            >
-              <Redo2 className="size-3.5" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="size-7 text-muted-foreground hover:text-foreground"
-              onClick={onClose}
-              title={t("editor.close")}
-            >
-              <X className="size-4" />
-            </Button>
-          </div>
+      {/* Compact Plugin Top Header Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
+        <div className="flex items-center gap-1.5">
+          {/* Compact Clickable Tools Plugin Trigger */}
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setToolsPopoverOpen((v) => !v)}
+            className={`h-8 text-xs font-bold gap-1.5 px-3 transition-all ${
+              toolsPopoverOpen
+                ? "bg-[#4F46E5] text-white shadow-sm"
+                : "bg-[#4F46E5]/15 hover:bg-[#4F46E5]/25 text-[#4F46E5] dark:text-[#818CF8] border border-[#4F46E5]/30"
+            }`}
+          >
+            <Pencil className="size-3.5" />
+            <span>{isRtl ? "افزونه ابزارها" : "Tools Plugin"}</span>
+            <span
+              className="size-3 rounded-full border border-white/70 shadow-2xs"
+              style={{ backgroundColor: strokeColor }}
+            />
+          </Button>
+
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-7"
+            disabled={index <= 0}
+            onClick={() => void step(index - 1)}
+            title={t("editor.undo")}
+          >
+            <Undo2 className="size-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-7"
+            disabled={index >= history.length - 1}
+            onClick={() => void step(index + 1)}
+            title={t("editor.redo")}
+          >
+            <Redo2 className="size-3.5" />
+          </Button>
         </div>
 
-        {/* Primary Tool Selector Grid (Writing instruments & eraser tools) */}
-        <div className="space-y-1.5">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground font-semibold">
-            {isRtl ? "انتخاب ابزار / نوشت‌افزار" : "Select Tool & Stationery"}
-          </span>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
-            {/* 1. Pencil (مداد) */}
-            <button
-              type="button"
-              onClick={() => setTool("pencil")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "pencil"
-                  ? "bg-accent-strong text-white shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <Pencil className="size-4" />
-              <span>{t("editor.pencil")}</span>
-            </button>
-
-            {/* 2. Pen (خودکار) */}
-            <button
-              type="button"
-              onClick={() => setTool("pen")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "pen"
-                  ? "bg-accent-strong text-white shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <Pen className="size-4" />
-              <span>{t("editor.pen")}</span>
-            </button>
-
-            {/* 3. Highlighter (هایلایتر) */}
-            <button
-              type="button"
-              onClick={() => {
-                setTool("highlighter");
-                setStrokeColor("#FDE047");
-              }}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "highlighter"
-                  ? "bg-[#EAB308] text-gray-950 font-bold shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <Highlighter className="size-4" />
-              <span>{t("editor.highlighter")}</span>
-            </button>
-
-            {/* 4. Brush (قلم‌مو) */}
-            <button
-              type="button"
-              onClick={() => setTool("brush")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "brush"
-                  ? "bg-accent-strong text-white shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <Paintbrush className="size-4" />
-              <span>{t("editor.brushTool")}</span>
-            </button>
-
-            {/* 5. Eraser (پاک‌کن موضعی) */}
-            <button
-              type="button"
-              onClick={() => setTool("eraser")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "eraser"
-                  ? "bg-[#F43F5E] text-white shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <Eraser className="size-4" />
-              <span>{t("editor.erase")}</span>
-            </button>
-
-            {/* 6. Text Whiteout / Erase Box (حذف کادری متن) */}
-            <button
-              type="button"
-              onClick={() => setTool("text-whiteout")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "text-whiteout"
-                  ? "bg-[#E11D48] text-white shadow-xs ring-1 ring-rose-400"
-                  : "bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/30"
-              }`}
-            >
-              <Scissors className="size-4" />
-              <span className="leading-tight">{t("editor.whiteout")}</span>
-            </button>
-
-            {/* 7. Reaction Arrow (پیکان واکنش) */}
-            <button
-              type="button"
-              onClick={() => setTool("arrow")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "arrow"
-                  ? "bg-accent-strong text-white shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <ArrowRight className="size-4" />
-              <span>{t("editor.arrow")}</span>
-            </button>
-
-            {/* 8. Line (خط مستقیم) */}
-            <button
-              type="button"
-              onClick={() => setTool("line")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "line"
-                  ? "bg-accent-strong text-white shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <Minus className="size-4" />
-              <span>{t("editor.line")}</span>
-            </button>
-
-            {/* 9. Rectangle (کادر مستطیل) */}
-            <button
-              type="button"
-              onClick={() => setTool("rect")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "rect"
-                  ? "bg-accent-strong text-white shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <Square className="size-4" />
-              <span>{t("editor.rect")}</span>
-            </button>
-
-            {/* 10. Text (درج متن و فرمول) */}
-            <button
-              type="button"
-              onClick={() => setTool("text")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "text"
-                  ? "bg-accent-strong text-white shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <Type className="size-4" />
-              <span>{t("editor.text")}</span>
-            </button>
-
-            {/* 11. Stamp (نماد شیمیایی) */}
-            <button
-              type="button"
-              onClick={() => setTool("stamp")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "stamp"
-                  ? "bg-accent-strong text-white shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <Stamp className="size-4" />
-              <span>{t("editor.stamp")}</span>
-            </button>
-
-            {/* 12. Eyedropper (قطره‌چکان) */}
-            <button
-              type="button"
-              onClick={() => setTool("eyedropper")}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
-                tool === "eyedropper"
-                  ? "bg-accent-strong text-white shadow-xs"
-                  : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
-              }`}
-            >
-              <Pipette className="size-4" />
-              <span>{t("editor.eyedropper")}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Dynamic Tool Properties Panel */}
-        <div className="rounded-lg border border-border/70 bg-card/60 p-2.5 space-y-2 text-xs">
-          {/* Specific options for Text Whiteout */}
-          {tool === "text-whiteout" && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-rose-500 flex items-center gap-1">
-                  <Scissors className="size-3" />
-                  {t("editor.whiteout")}
-                </span>
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {isRtl ? "کادر سفیدکننده" : "Rect Whiteout"}
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground leading-snug">
-                {t("editor.whiteoutHint")}
-              </p>
-              <div className="flex items-center gap-2 pt-1">
-                <span className="text-[11px] text-foreground">{t("editor.background")}:</span>
-                <input
-                  type="color"
-                  value={bgColor}
-                  onChange={(e) => setBgColor(e.target.value)}
-                  className="size-6 rounded border border-border cursor-pointer bg-transparent"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-6 text-[10px] px-2"
-                  onClick={() => setBgColor("#ffffff")}
-                >
-                  {isRtl ? "سفید خالص" : "Pure White"}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Specific options for Eraser */}
-          {tool === "eraser" && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-foreground">{t("editor.erase")}</span>
-                <span className="tabular-nums font-mono text-[11px]">{brushSize * 2}px</span>
-              </div>
-              <input
-                type="range"
-                min={2}
-                max={50}
-                value={brushSize}
-                onChange={(e) => setBrushSize(Number(e.target.value))}
-                className="w-full cursor-pointer accent-accent-strong"
-              />
-              <label className="flex items-center gap-2 cursor-pointer pt-0.5">
-                <input
-                  type="checkbox"
-                  checked={eraseToColor}
-                  onChange={(e) => setEraseToColor(e.target.checked)}
-                  className="size-3.5 rounded accent-accent-strong"
-                />
-                <span className="text-[11px] leading-tight">{t("editor.eraseToColor")}</span>
-              </label>
-            </div>
-          )}
-
-          {/* Specific options for Freehand Stationery (Pencil, Pen, Brush, Arrow, Line, Rect) */}
-          {(tool === "pencil" ||
-            tool === "pen" ||
-            tool === "highlighter" ||
-            tool === "brush" ||
-            tool === "arrow" ||
-            tool === "line" ||
-            tool === "rect") && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-foreground">{t("editor.brush")}</span>
-                <span className="tabular-nums font-mono text-[11px]">{brushSize}px</span>
-              </div>
-              <input
-                type="range"
-                min={1}
-                max={40}
-                value={brushSize}
-                onChange={(e) => setBrushSize(Number(e.target.value))}
-                className="w-full cursor-pointer accent-accent-strong"
-              />
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-[11px] text-muted-foreground">{t("editor.opacity")}</span>
-                <span className="tabular-nums font-mono text-[11px]">
-                  {Math.round(opacity * 100)}%
-                </span>
-              </div>
-              <input
-                type="range"
-                min={0.1}
-                max={1}
-                step={0.05}
-                value={opacity}
-                onChange={(e) => setOpacity(Number(e.target.value))}
-                className="w-full cursor-pointer accent-accent-strong"
-              />
-            </div>
-          )}
-
-          {/* Specific options for Text Tool */}
-          {tool === "text" && (
-            <div className="space-y-2">
-              <input
-                value={textValue}
-                onChange={(e) => setTextValue(e.target.value)}
-                placeholder={t("editor.textPlaceholder")}
-                className="w-full rounded-md border border-input bg-background px-2.5 py-1 text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
-              />
-              {/* Formula & Symbol Quick Shortcuts */}
-              <div className="flex flex-wrap items-center gap-1">
-                {["→", "⇌", "Δ", "hν", "°C", "Å", "α", "β", "ee%", "Pd", "Me", "Ph"].map((sym) => (
-                  <button
-                    key={sym}
-                    type="button"
-                    onClick={() => setTextValue((v) => v + sym)}
-                    className="rounded bg-secondary/80 px-1.5 py-0.5 font-mono text-[10px] text-foreground hover:bg-secondary transition-colors"
-                  >
-                    {sym}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <div>
-                  <span className="block text-[10px] text-muted-foreground mb-1">
-                    {t("editor.size")}
-                  </span>
-                  <input
-                    type="number"
-                    min={10}
-                    max={120}
-                    value={fontSize}
-                    onChange={(e) => setFontSize(Number(e.target.value))}
-                    className="w-full rounded border border-input bg-background px-2 py-0.5 text-xs text-foreground"
-                  />
-                </div>
-                <div>
-                  <span className="block text-[10px] text-muted-foreground mb-1">
-                    {isRtl ? "فونت" : "Font"}
-                  </span>
-                  <select
-                    value={fontFamily}
-                    onChange={(e) => setFontFamily(e.target.value)}
-                    className="w-full rounded border border-input bg-background px-1.5 py-0.5 text-xs text-foreground"
-                  >
-                    {FONTS.map((f) => (
-                      <option key={f.value} value={f.value}>
-                        {f.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <p className="text-[10px] text-muted-foreground italic">{t("editor.textHint")}</p>
-            </div>
-          )}
-
-          {/* Specific options for Chemical Stamp */}
-          {tool === "stamp" && (
-            <div className="space-y-1.5">
-              <span className="text-[10px] text-muted-foreground font-semibold">
-                {isRtl ? "انتخاب نماد برای مهر زدن" : "Select Symbol to Stamp"}
-              </span>
-              <div className="flex flex-wrap gap-1">
-                {QUICK_CHEM_STAMPS.map((sym) => (
-                  <button
-                    key={sym}
-                    type="button"
-                    onClick={() => setSelectedStamp(sym)}
-                    className={`rounded px-2 py-1 font-mono text-xs font-bold transition-all ${
-                      selectedStamp === sym
-                        ? "bg-accent-strong text-white shadow-xs"
-                        : "bg-secondary text-foreground hover:bg-secondary/80 border border-border"
-                    }`}
-                  >
-                    {sym}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[10px] text-muted-foreground italic">{t("editor.textHint")}</p>
-            </div>
-          )}
-
-          {/* Specific options for Eyedropper */}
-          {tool === "eyedropper" && (
-            <p className="text-[11px] text-muted-foreground">
-              {isRtl
-                ? "روی هر نقطه از تصویر کلیک کنید تا رنگ دقیق آن نمونه‌برداری شود."
-                : "Click on any pixel of the graphic to sample its exact color."}
-            </p>
-          )}
-        </div>
-
-        {/* Color Palette (پالت رنگ‌های شیمیایی و اختصاصی) */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground font-semibold">
-              {t("editor.palette")}
-            </span>
-            <div className="flex items-center gap-1.5">
-              <span
-                className="size-3.5 rounded-full border border-border shadow-2xs"
-                style={{ backgroundColor: strokeColor }}
-              />
-              <input
-                type="color"
-                value={strokeColor}
-                onChange={(e) => setStrokeColor(e.target.value)}
-                className="size-5 rounded border border-border cursor-pointer bg-transparent"
-                title={t("editor.color")}
-              />
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {SWATCHES.map((s) => (
-              <button
-                key={s.color}
-                type="button"
-                onClick={() => setStrokeColor(s.color)}
-                title={s.label}
-                className={`size-6 rounded-full border transition-all ${
-                  strokeColor.toLowerCase() === s.color.toLowerCase()
-                    ? "border-accent-strong scale-110 shadow-xs ring-2 ring-accent-strong/40"
-                    : "border-border/80 hover:scale-105"
-                }`}
-                style={{ backgroundColor: s.color }}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Action Buttons (Save, Apply, Upload, Reset) */}
-        <div className="mt-auto pt-2 border-t border-border/80 space-y-2">
+        <div className="flex items-center gap-1.5 ms-auto">
           {onSaveAsCurrent && (
             <Button
               size="sm"
               onClick={handleApplyToOutput}
-              className="w-full h-8 text-xs font-semibold gap-1.5 bg-[#4F46E5] hover:bg-[#4338CA] text-white shadow-xs"
+              className="h-7 text-xs font-semibold gap-1 bg-[#4F46E5] hover:bg-[#4338CA] text-white px-2.5"
             >
-              <Check className="size-3.5" />
-              {t("editor.applyToPreview")}
+              <Check className="size-3" />
+              <span>{t("editor.applyToPreview")}</span>
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={savePNG}
+            className="h-7 text-xs font-semibold gap-1 px-2"
+          >
+            <Download className="size-3" />
+            <span>{t("editor.save")}</span>
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-7 text-muted-foreground hover:text-foreground"
+            onClick={onClose}
+            title={t("editor.close")}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+      </div>
 
-          {/* Quick Upload Image to Canvas */}
-          <label className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/80 bg-secondary/40 hover:bg-secondary/70 p-1.5 cursor-pointer text-xs font-medium text-foreground transition-colors">
-            <Upload className="size-3.5 text-[#06B6D4]" />
-            <span>{isRtl ? "بارگذاری عکس از کامپیوتر" : "Upload Image to Edit"}</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = async (ev) => {
-                  const url = ev.target?.result as string;
-                  if (url) {
-                    await paint(url);
-                    commit();
-                    toast.success(isRtl ? "تصویر با موفقیت بارگذاری شد" : "Image loaded");
-                  }
-                };
-                reader.readAsDataURL(file);
-              }}
-            />
-          </label>
-
-          <div className="grid grid-cols-2 gap-1.5">
+      {/* Collapsible Floating Plugin Popover — Only shown when user clicks Tools Plugin */}
+      {toolsPopoverOpen && (
+        <aside className="absolute top-13 left-3 right-3 sm:right-auto sm:w-80 z-40 flex flex-col gap-3 rounded-xl border border-border bg-background/95 dark:bg-neutral-900/95 backdrop-blur-xl p-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 max-h-[75vh] overflow-y-auto">
+          <div className="flex items-center justify-between border-b border-border/70 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-[#4F46E5]" />
+              <h3 className="font-display text-xs font-bold text-foreground">
+                {t("editor.stationery")}
+              </h3>
+            </div>
             <Button
-              size="sm"
-              variant="outline"
-              onClick={savePNG}
-              className="h-8 text-xs font-semibold gap-1"
+              size="icon"
+              variant="ghost"
+              className="size-6 text-muted-foreground hover:text-foreground"
+              onClick={() => setToolsPopoverOpen(false)}
             >
-              <Download className="size-3.5" />
-              {t("editor.save")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void reset()}
-              className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1"
-            >
-              <RotateCcw className="size-3.5" />
-              {t("editor.reset")}
+              <X className="size-3.5" />
             </Button>
           </div>
-        </div>
-      </aside>
+
+          {/* Primary Tool Selector Grid (Writing instruments & eraser tools) */}
+          <div className="space-y-1.5">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground font-semibold">
+              {isRtl ? "انتخاب ابزار / نوشت‌افزار" : "Select Tool & Stationery"}
+            </span>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+              {/* 1. Pencil (مداد) */}
+              <button
+                type="button"
+                onClick={() => setTool("pencil")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "pencil"
+                    ? "bg-accent-strong text-white shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <Pencil className="size-4" />
+                <span>{t("editor.pencil")}</span>
+              </button>
+
+              {/* 2. Pen (خودکار) */}
+              <button
+                type="button"
+                onClick={() => setTool("pen")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "pen"
+                    ? "bg-accent-strong text-white shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <Pen className="size-4" />
+                <span>{t("editor.pen")}</span>
+              </button>
+
+              {/* 3. Highlighter (هایلایتر) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTool("highlighter");
+                  setStrokeColor("#FDE047");
+                }}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "highlighter"
+                    ? "bg-[#EAB308] text-gray-950 font-bold shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <Highlighter className="size-4" />
+                <span>{t("editor.highlighter")}</span>
+              </button>
+
+              {/* 4. Brush (قلم‌مو) */}
+              <button
+                type="button"
+                onClick={() => setTool("brush")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "brush"
+                    ? "bg-accent-strong text-white shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <Paintbrush className="size-4" />
+                <span>{t("editor.brushTool")}</span>
+              </button>
+
+              {/* 5. Eraser (پاک‌کن موضعی) */}
+              <button
+                type="button"
+                onClick={() => setTool("eraser")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "eraser"
+                    ? "bg-[#F43F5E] text-white shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <Eraser className="size-4" />
+                <span>{t("editor.erase")}</span>
+              </button>
+
+              {/* 6. Text Whiteout / Erase Box (حذف کادری متن) */}
+              <button
+                type="button"
+                onClick={() => setTool("text-whiteout")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "text-whiteout"
+                    ? "bg-[#E11D48] text-white shadow-xs ring-1 ring-rose-400"
+                    : "bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/30"
+                }`}
+              >
+                <Scissors className="size-4" />
+                <span className="leading-tight">{t("editor.whiteout")}</span>
+              </button>
+
+              {/* 7. Reaction Arrow (پیکان واکنش) */}
+              <button
+                type="button"
+                onClick={() => setTool("arrow")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "arrow"
+                    ? "bg-accent-strong text-white shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <ArrowRight className="size-4" />
+                <span>{t("editor.arrow")}</span>
+              </button>
+
+              {/* 8. Line (خط مستقیم) */}
+              <button
+                type="button"
+                onClick={() => setTool("line")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "line"
+                    ? "bg-accent-strong text-white shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <Minus className="size-4" />
+                <span>{t("editor.line")}</span>
+              </button>
+
+              {/* 9. Rectangle (کادر مستطیل) */}
+              <button
+                type="button"
+                onClick={() => setTool("rect")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "rect"
+                    ? "bg-accent-strong text-white shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <Square className="size-4" />
+                <span>{t("editor.rect")}</span>
+              </button>
+
+              {/* 10. Text (درج متن و فرمول) */}
+              <button
+                type="button"
+                onClick={() => setTool("text")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "text"
+                    ? "bg-accent-strong text-white shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <Type className="size-4" />
+                <span>{t("editor.text")}</span>
+              </button>
+
+              {/* 11. Stamp (نماد شیمیایی) */}
+              <button
+                type="button"
+                onClick={() => setTool("stamp")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "stamp"
+                    ? "bg-accent-strong text-white shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <Stamp className="size-4" />
+                <span>{t("editor.stamp")}</span>
+              </button>
+
+              {/* 12. Eyedropper (قطره‌چکان) */}
+              <button
+                type="button"
+                onClick={() => setTool("eyedropper")}
+                className={`flex flex-col items-center justify-center gap-1 rounded-lg p-2 text-center text-[11px] font-semibold transition-all ${
+                  tool === "eyedropper"
+                    ? "bg-accent-strong text-white shadow-xs"
+                    : "bg-secondary/60 text-foreground hover:bg-secondary border border-border/60"
+                }`}
+              >
+                <Pipette className="size-4" />
+                <span>{t("editor.eyedropper")}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Dynamic Tool Properties Panel */}
+          <div className="rounded-lg border border-border/70 bg-card/60 p-2.5 space-y-2 text-xs">
+            {/* Specific options for Text Whiteout */}
+            {tool === "text-whiteout" && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-rose-500 flex items-center gap-1">
+                    <Scissors className="size-3" />
+                    {t("editor.whiteout")}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {isRtl ? "کادر سفیدکننده" : "Rect Whiteout"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  {t("editor.whiteoutHint")}
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-[11px] text-foreground">{t("editor.background")}:</span>
+                  <input
+                    type="color"
+                    value={bgColor}
+                    onChange={(e) => setBgColor(e.target.value)}
+                    className="size-6 rounded border border-border cursor-pointer bg-transparent"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => setBgColor("#ffffff")}
+                  >
+                    {isRtl ? "سفید خالص" : "Pure White"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Specific options for Eraser */}
+            {tool === "eraser" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground">{t("editor.erase")}</span>
+                  <span className="tabular-nums font-mono text-[11px]">{brushSize * 2}px</span>
+                </div>
+                <input
+                  type="range"
+                  min={2}
+                  max={50}
+                  value={brushSize}
+                  onChange={(e) => setBrushSize(Number(e.target.value))}
+                  className="w-full cursor-pointer accent-accent-strong"
+                />
+                <label className="flex items-center gap-2 cursor-pointer pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={eraseToColor}
+                    onChange={(e) => setEraseToColor(e.target.checked)}
+                    className="size-3.5 rounded accent-accent-strong"
+                  />
+                  <span className="text-[11px] leading-tight">{t("editor.eraseToColor")}</span>
+                </label>
+              </div>
+            )}
+
+            {/* Specific options for Freehand Stationery (Pencil, Pen, Brush, Arrow, Line, Rect) */}
+            {(tool === "pencil" ||
+              tool === "pen" ||
+              tool === "highlighter" ||
+              tool === "brush" ||
+              tool === "arrow" ||
+              tool === "line" ||
+              tool === "rect") && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground">{t("editor.brush")}</span>
+                  <span className="tabular-nums font-mono text-[11px]">{brushSize}px</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={40}
+                  value={brushSize}
+                  onChange={(e) => setBrushSize(Number(e.target.value))}
+                  className="w-full cursor-pointer accent-accent-strong"
+                />
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-muted-foreground">{t("editor.opacity")}</span>
+                  <span className="tabular-nums font-mono text-[11px]">
+                    {Math.round(opacity * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={1}
+                  step={0.05}
+                  value={opacity}
+                  onChange={(e) => setOpacity(Number(e.target.value))}
+                  className="w-full cursor-pointer accent-accent-strong"
+                />
+              </div>
+            )}
+
+            {/* Specific options for Text Tool */}
+            {tool === "text" && (
+              <div className="space-y-2">
+                <input
+                  value={textValue}
+                  onChange={(e) => setTextValue(e.target.value)}
+                  placeholder={t("editor.textPlaceholder")}
+                  className="w-full rounded-md border border-input bg-background px-2.5 py-1 text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
+                />
+                {/* Formula & Symbol Quick Shortcuts */}
+                <div className="flex flex-wrap items-center gap-1">
+                  {["→", "⇌", "Δ", "hν", "°C", "Å", "α", "β", "ee%", "Pd", "Me", "Ph"].map(
+                    (sym) => (
+                      <button
+                        key={sym}
+                        type="button"
+                        onClick={() => setTextValue((v) => v + sym)}
+                        className="rounded bg-secondary/80 px-1.5 py-0.5 font-mono text-[10px] text-foreground hover:bg-secondary transition-colors"
+                      >
+                        {sym}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <span className="block text-[10px] text-muted-foreground mb-1">
+                      {t("editor.size")}
+                    </span>
+                    <input
+                      type="number"
+                      min={10}
+                      max={120}
+                      value={fontSize}
+                      onChange={(e) => setFontSize(Number(e.target.value))}
+                      className="w-full rounded border border-input bg-background px-2 py-0.5 text-xs text-foreground"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-muted-foreground mb-1">
+                      {isRtl ? "فونت" : "Font"}
+                    </span>
+                    <select
+                      value={fontFamily}
+                      onChange={(e) => setFontFamily(e.target.value)}
+                      className="w-full rounded border border-input bg-background px-1.5 py-0.5 text-xs text-foreground"
+                    >
+                      {FONTS.map((f) => (
+                        <option key={f.value} value={f.value}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground italic">{t("editor.textHint")}</p>
+              </div>
+            )}
+
+            {/* Specific options for Chemical Stamp */}
+            {tool === "stamp" && (
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-muted-foreground font-semibold">
+                  {isRtl ? "انتخاب نماد برای مهر زدن" : "Select Symbol to Stamp"}
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {QUICK_CHEM_STAMPS.map((sym) => (
+                    <button
+                      key={sym}
+                      type="button"
+                      onClick={() => setSelectedStamp(sym)}
+                      className={`rounded px-2 py-1 font-mono text-xs font-bold transition-all ${
+                        selectedStamp === sym
+                          ? "bg-accent-strong text-white shadow-xs"
+                          : "bg-secondary text-foreground hover:bg-secondary/80 border border-border"
+                      }`}
+                    >
+                      {sym}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground italic">{t("editor.textHint")}</p>
+              </div>
+            )}
+
+            {/* Specific options for Eyedropper */}
+            {tool === "eyedropper" && (
+              <p className="text-[11px] text-muted-foreground">
+                {isRtl
+                  ? "روی هر نقطه از تصویر کلیک کنید تا رنگ دقیق آن نمونه‌برداری شود."
+                  : "Click on any pixel of the graphic to sample its exact color."}
+              </p>
+            )}
+          </div>
+
+          {/* Color Palette (پالت رنگ‌های شیمیایی و اختصاصی) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground font-semibold">
+                {t("editor.palette")}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="size-3.5 rounded-full border border-border shadow-2xs"
+                  style={{ backgroundColor: strokeColor }}
+                />
+                <input
+                  type="color"
+                  value={strokeColor}
+                  onChange={(e) => setStrokeColor(e.target.value)}
+                  className="size-5 rounded border border-border cursor-pointer bg-transparent"
+                  title={t("editor.color")}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {SWATCHES.map((s) => (
+                <button
+                  key={s.color}
+                  type="button"
+                  onClick={() => setStrokeColor(s.color)}
+                  title={s.label}
+                  className={`size-6 rounded-full border transition-all ${
+                    strokeColor.toLowerCase() === s.color.toLowerCase()
+                      ? "border-accent-strong scale-110 shadow-xs ring-2 ring-accent-strong/40"
+                      : "border-border/80 hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: s.color }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Action Buttons (Save, Apply, Upload, Reset) */}
+          <div className="mt-auto pt-2 border-t border-border/80 space-y-2">
+            {onSaveAsCurrent && (
+              <Button
+                size="sm"
+                onClick={handleApplyToOutput}
+                className="w-full h-8 text-xs font-semibold gap-1.5 bg-[#4F46E5] hover:bg-[#4338CA] text-white shadow-xs"
+              >
+                <Check className="size-3.5" />
+                {t("editor.applyToPreview")}
+              </Button>
+            )}
+
+            {/* Quick Upload Image to Canvas */}
+            <label className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/80 bg-secondary/40 hover:bg-secondary/70 p-1.5 cursor-pointer text-xs font-medium text-foreground transition-colors">
+              <Upload className="size-3.5 text-[#06B6D4]" />
+              <span>{isRtl ? "بارگذاری عکس از کامپیوتر" : "Upload Image to Edit"}</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = async (ev) => {
+                    const url = ev.target?.result as string;
+                    if (url) {
+                      await paint(url);
+                      commit();
+                      toast.success(isRtl ? "تصویر با موفقیت بارگذاری شد" : "Image loaded");
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setToolsPopoverOpen(false)}
+                className="h-8 text-xs font-semibold gap-1"
+              >
+                <Check className="size-3.5" />
+                {isRtl ? "بستن پنل" : "Done"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void reset()}
+                className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1"
+              >
+                <RotateCcw className="size-3.5" />
+                {t("editor.reset")}
+              </Button>
+            </div>
+          </div>
+        </aside>
+      )}
 
       {/* =========================================================================
           CANVAS VIEWPORT & DRAWING WORKSPACE (بخش بوم و تصویر)
           ========================================================================= */}
-      <main className="flex-1 flex flex-col min-w-0 rounded-xl border border-border/80 bg-background/80 p-2 sm:p-3 overflow-hidden">
+      <main
+        onPointerDown={() => {
+          if (toolsPopoverOpen) setToolsPopoverOpen(false);
+        }}
+        className="w-full flex flex-col min-w-0 rounded-xl border border-border/80 bg-background/80 p-2 sm:p-3 overflow-hidden"
+      >
         {/* Top Canvas Bar (Zoom, Dimensions, Info) */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2 mb-2 text-xs">
           <div className="flex items-center gap-2">

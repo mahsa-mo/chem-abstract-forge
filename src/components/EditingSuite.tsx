@@ -1,5 +1,14 @@
-import React from "react";
-import { BoxSelect, Eraser, Pencil, Trash2, SlidersHorizontal, Palette } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import {
+  BoxSelect,
+  Eraser,
+  Pencil,
+  Trash2,
+  SlidersHorizontal,
+  Wand2,
+  X,
+  CornerDownRight,
+} from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 export type EditingSuiteTool = "pencil" | "eraser" | "selection";
@@ -8,150 +17,186 @@ export interface EditingSuiteProps {
   activeTool?: EditingSuiteTool | string | undefined;
   onSelectTool: (tool: EditingSuiteTool) => void;
   onClear: () => void;
-  onOpenFullSuite?: () => void;
-  color?: string;
-  className?: string;
+  onOpenFullSuite?: (() => void) | undefined;
+  onOpenMechanism?: (() => void) | undefined;
+  color?: string | undefined;
+  className?: string | undefined;
 }
 
 /**
- * Vertical 'Editing Suite' Toolbar
+ * Compact Collapsible 'Editing Suite' Plugin Widget
  *
- * Designed with absolute positioning aligned to the right side of the image display area
- * inside a high-luster glassmorphism container.
+ * Renders as a small, unobtrusive corner plugin button so the user can view the
+ * entire image without obstruction. Clicking the button expands a compact popover
+ * menu to pick a tool.
  */
 export function EditingSuite({
   activeTool = "pencil",
   onSelectTool,
   onClear,
   onOpenFullSuite,
+  onOpenMechanism,
   color,
   className = "",
 }: EditingSuiteProps) {
   const { locale } = useI18n();
   const isRtl = locale === "fa";
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
 
   return (
     <div
-      role="toolbar"
-      aria-label={isRtl ? "جعبه ابزار ویرایش" : "Editing Suite"}
-      className={`absolute right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 rounded-2xl border border-white/40 dark:border-white/15 bg-white/75 dark:bg-neutral-900/80 backdrop-blur-xl p-1.5 shadow-[0_10px_35px_-5px_rgba(0,0,0,0.25),0_4px_12px_rgba(0,0,0,0.12)] transition-all duration-200 select-none ${className}`}
+      ref={containerRef}
+      className={`absolute bottom-2.5 right-2.5 z-30 flex flex-col items-end select-none ${className}`}
     >
-      {/* Subtle glass reflection highlight on top */}
-      <span className="pointer-events-none absolute inset-x-2 top-0.5 h-3 rounded-t-xl bg-gradient-to-b from-white/60 to-transparent" />
-
-      {/* 1. Pencil Tool (مداد) */}
-      <button
-        type="button"
-        onClick={() => onSelectTool("pencil")}
-        title={isRtl ? "مداد (Pencil)" : "Pencil Tool"}
-        aria-label="Pencil Tool"
-        aria-pressed={activeTool === "pencil"}
-        className={`group relative flex size-9 items-center justify-center rounded-xl transition-all ${
-          activeTool === "pencil"
-            ? "bg-[#4F46E5] text-white shadow-md shadow-indigo-500/30 scale-105"
-            : "text-neutral-700 dark:text-neutral-200 hover:bg-neutral-200/60 dark:hover:bg-neutral-800/80 hover:text-foreground"
-        }`}
-      >
-        <Pencil className="size-4 transition-transform group-hover:scale-110" />
-        {/* Tooltip */}
-        <span
-          className={`pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 hidden whitespace-nowrap rounded-md bg-neutral-900/90 dark:bg-neutral-100/90 px-2 py-1 text-[11px] font-medium text-white dark:text-neutral-900 shadow-md group-hover:block z-40`}
+      {/* Popover Tool Menu — only visible when user clicks the compact plugin button */}
+      {open && (
+        <div
+          role="toolbar"
+          aria-label={isRtl ? "ابزارهای ویرایش" : "Editing Tools"}
+          className="mb-2 flex items-center gap-1 rounded-xl border border-border/80 bg-background/95 dark:bg-neutral-900/95 backdrop-blur-xl p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150"
         >
-          {isRtl ? "مداد" : "Pencil"}
-        </span>
-      </button>
-
-      {/* 2. Eraser Tool (پاک‌کن) */}
-      <button
-        type="button"
-        onClick={() => onSelectTool("eraser")}
-        title={isRtl ? "پاک‌کن (Eraser)" : "Eraser Tool"}
-        aria-label="Eraser Tool"
-        aria-pressed={activeTool === "eraser"}
-        className={`group relative flex size-9 items-center justify-center rounded-xl transition-all ${
-          activeTool === "eraser"
-            ? "bg-[#F43F5E] text-white shadow-md shadow-rose-500/30 scale-105"
-            : "text-neutral-700 dark:text-neutral-200 hover:bg-neutral-200/60 dark:hover:bg-neutral-800/80 hover:text-foreground"
-        }`}
-      >
-        <Eraser className="size-4 transition-transform group-hover:scale-110" />
-        {/* Tooltip */}
-        <span
-          className={`pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 hidden whitespace-nowrap rounded-md bg-neutral-900/90 dark:bg-neutral-100/90 px-2 py-1 text-[11px] font-medium text-white dark:text-neutral-900 shadow-md group-hover:block z-40`}
-        >
-          {isRtl ? "پاک‌کن" : "Eraser"}
-        </span>
-      </button>
-
-      {/* 3. Selection / Box Select Tool (ابزار انتخاب و حذف کادری) */}
-      <button
-        type="button"
-        onClick={() => onSelectTool("selection")}
-        title={isRtl ? "ابزار انتخاب و کادر (Selection)" : "Selection Tool"}
-        aria-label="Selection Tool"
-        aria-pressed={activeTool === "selection"}
-        className={`group relative flex size-9 items-center justify-center rounded-xl transition-all ${
-          activeTool === "selection"
-            ? "bg-[#06B6D4] text-white shadow-md shadow-cyan-500/30 scale-105"
-            : "text-neutral-700 dark:text-neutral-200 hover:bg-neutral-200/60 dark:hover:bg-neutral-800/80 hover:text-foreground"
-        }`}
-      >
-        <BoxSelect className="size-4 transition-transform group-hover:scale-110" />
-        {/* Tooltip */}
-        <span
-          className={`pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 hidden whitespace-nowrap rounded-md bg-neutral-900/90 dark:bg-neutral-100/90 px-2 py-1 text-[11px] font-medium text-white dark:text-neutral-900 shadow-md group-hover:block z-40`}
-        >
-          {isRtl ? "انتخاب و کادر" : "Selection"}
-        </span>
-      </button>
-
-      {/* Divider */}
-      <div className="my-0.5 h-px w-6 bg-neutral-300/80 dark:bg-neutral-700/80" />
-
-      {/* 4. Clear Tool (پاکسازی ویرایش‌ها) */}
-      <button
-        type="button"
-        onClick={onClear}
-        title={isRtl ? "پاکسازی تغییرات (Clear)" : "Clear Edits"}
-        aria-label="Clear Tool"
-        className="group relative flex size-9 items-center justify-center rounded-xl text-neutral-600 dark:text-neutral-300 hover:bg-rose-500/15 hover:text-rose-600 dark:hover:text-rose-400 transition-all active:scale-95"
-      >
-        <Trash2 className="size-4 transition-transform group-hover:scale-110" />
-        {/* Tooltip */}
-        <span
-          className={`pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 hidden whitespace-nowrap rounded-md bg-neutral-900/90 dark:bg-neutral-100/90 px-2 py-1 text-[11px] font-medium text-white dark:text-neutral-900 shadow-md group-hover:block z-40`}
-        >
-          {isRtl ? "پاکسازی کل" : "Clear"}
-        </span>
-      </button>
-
-      {/* Optional: Quick palette/color or expand studio */}
-      {onOpenFullSuite && (
-        <>
-          <div className="my-0.5 h-px w-6 bg-neutral-300/80 dark:bg-neutral-700/80" />
+          {/* 1. Pencil */}
           <button
             type="button"
-            onClick={onOpenFullSuite}
-            title={isRtl ? "همه نوشت‌افزارها و ابزارها" : "Full Editing Suite"}
-            aria-label="Full Editing Suite"
-            className="group relative flex size-9 items-center justify-center rounded-xl text-[#4F46E5] dark:text-[#818CF8] hover:bg-[#4F46E5]/15 transition-all"
+            onClick={() => {
+              onSelectTool("pencil");
+              setOpen(false);
+            }}
+            title={isRtl ? "مداد (Pencil)" : "Pencil"}
+            className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all ${
+              activeTool === "pencil"
+                ? "bg-[#4F46E5] text-white shadow-xs"
+                : "text-foreground hover:bg-secondary"
+            }`}
           >
-            {color ? (
+            <Pencil className="size-3.5" />
+            <span>{isRtl ? "مداد" : "Pencil"}</span>
+          </button>
+
+          {/* 2. Eraser */}
+          <button
+            type="button"
+            onClick={() => {
+              onSelectTool("eraser");
+              setOpen(false);
+            }}
+            title={isRtl ? "پاک‌کن (Eraser)" : "Eraser"}
+            className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all ${
+              activeTool === "eraser"
+                ? "bg-[#F43F5E] text-white shadow-xs"
+                : "text-foreground hover:bg-secondary"
+            }`}
+          >
+            <Eraser className="size-3.5" />
+            <span>{isRtl ? "پاک‌کن" : "Eraser"}</span>
+          </button>
+
+          {/* 3. Box Selection / Whiteout */}
+          <button
+            type="button"
+            onClick={() => {
+              onSelectTool("selection");
+              setOpen(false);
+            }}
+            title={isRtl ? "حذف کادری (Selection)" : "Box Erase"}
+            className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all ${
+              activeTool === "selection"
+                ? "bg-[#06B6D4] text-white shadow-xs"
+                : "text-foreground hover:bg-secondary"
+            }`}
+          >
+            <BoxSelect className="size-3.5" />
+            <span>{isRtl ? "کادر حذف" : "Select"}</span>
+          </button>
+
+          <div className="mx-0.5 h-4 w-px bg-border" />
+
+          {/* 4. Clear */}
+          <button
+            type="button"
+            onClick={() => {
+              onClear();
+              setOpen(false);
+            }}
+            title={isRtl ? "پاکسازی تغییرات" : "Clear Edits"}
+            className="flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-rose-500/15 hover:text-rose-500 transition-colors"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+
+          {/* 5. Mechanism Overlay */}
+          {onOpenMechanism && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenMechanism();
+                setOpen(false);
+              }}
+              title={isRtl ? "فلش‌های مکانیزم" : "Mechanism Arrows"}
+              className="flex items-center gap-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 dark:text-purple-400 px-2 py-1.5 text-[11px] font-bold transition-colors"
+            >
+              <CornerDownRight className="size-3" />
+              <span>{isRtl ? "مکانیزم" : "Mechanism"}</span>
+            </button>
+          )}
+
+          {/* 6. Full Suite */}
+          {onOpenFullSuite && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenFullSuite();
+                setOpen(false);
+              }}
+              title={isRtl ? "همه ابزارها" : "All Tools"}
+              className="flex items-center gap-1 rounded-lg bg-[#4F46E5]/15 hover:bg-[#4F46E5]/25 text-[#4F46E5] dark:text-[#818CF8] px-2 py-1.5 text-[11px] font-bold transition-colors"
+            >
+              <SlidersHorizontal className="size-3" />
+              <span>{isRtl ? "همه ابزارها" : "More"}</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Compact Plugin Trigger Button */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title={isRtl ? "افزونه ابزارهای ویرایش" : "Editing Tools Plugin"}
+        aria-expanded={open}
+        className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-semibold shadow-md backdrop-blur-md transition-all ${
+          open
+            ? "border-[#4F46E5] bg-[#4F46E5] text-white"
+            : "border-border/80 bg-background/85 hover:bg-background text-foreground hover:scale-105"
+        }`}
+      >
+        {open ? (
+          <X className="size-3.5" />
+        ) : (
+          <>
+            <Wand2 className="size-3.5 text-[#4F46E5] dark:text-[#818CF8]" />
+            {color && (
               <span
-                className="size-3.5 rounded-full border border-white/60 shadow-2xs"
+                className="size-2.5 rounded-full border border-white/60"
                 style={{ backgroundColor: color }}
               />
-            ) : (
-              <SlidersHorizontal className="size-3.5 transition-transform group-hover:rotate-45" />
             )}
-            <span
-              className={`pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 hidden whitespace-nowrap rounded-md bg-neutral-900/90 dark:bg-neutral-100/90 px-2 py-1 text-[11px] font-medium text-white dark:text-neutral-900 shadow-md group-hover:block z-40`}
-            >
-              {isRtl ? "تنظیمات پیشرفته" : "Full Suite"}
-            </span>
-          </button>
-        </>
-      )}
+            <span className="text-[11px]">{isRtl ? "ابزار ادیت" : "Edit Tools"}</span>
+          </>
+        )}
+      </button>
     </div>
   );
 }

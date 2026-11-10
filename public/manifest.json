@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "ChemStudio — Scientific Vector Workbench",
+  "short_name": "ChemStudio",
+  "description": "Publication-grade vector graphics workbench for chemistry papers, reaction schemes, 3D structures, and journal submission dossiers.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#06B6D4",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

@@ -41,9 +41,9 @@ interface RecentReactionsDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectReaction: (reaction: RecentReaction) => void;
-  currentReactionId?: string | null;
+  currentReactionId?: string | null | undefined;
   userId?: string | undefined;
-  refreshTrigger?: number;
+  refreshTrigger?: number | undefined;
 }
 
 export function RecentReactionsDrawer({

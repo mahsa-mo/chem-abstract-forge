@@ -12,7 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as ApiChemicalLookupRouteImport } from './routes/api/chemical-lookup'
 import { Route as ApiGenerateAbstractRouteImport } from './routes/api/generate-abstract'
+import { Route as ApiReactionValidateRouteImport } from './routes/api/reaction-validate'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -29,9 +31,19 @@ const PricingRoute = PricingRouteImport.update({
   path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiChemicalLookupRoute = ApiChemicalLookupRouteImport.update({
+  id: '/api/chemical-lookup',
+  path: '/api/chemical-lookup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiGenerateAbstractRoute = ApiGenerateAbstractRouteImport.update({
   id: '/api/generate-abstract',
   path: '/api/generate-abstract',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiReactionValidateRoute = ApiReactionValidateRouteImport.update({
+  id: '/api/reaction-validate',
+  path: '/api/reaction-validate',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -39,34 +51,61 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/api/chemical-lookup': typeof ApiChemicalLookupRoute
   '/api/generate-abstract': typeof ApiGenerateAbstractRoute
+  '/api/reaction-validate': typeof ApiReactionValidateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/api/chemical-lookup': typeof ApiChemicalLookupRoute
   '/api/generate-abstract': typeof ApiGenerateAbstractRoute
+  '/api/reaction-validate': typeof ApiReactionValidateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/api/chemical-lookup': typeof ApiChemicalLookupRoute
   '/api/generate-abstract': typeof ApiGenerateAbstractRoute
+  '/api/reaction-validate': typeof ApiReactionValidateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/pricing' | '/api/generate-abstract'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/pricing'
+    | '/api/chemical-lookup'
+    | '/api/generate-abstract'
+    | '/api/reaction-validate'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/pricing' | '/api/generate-abstract'
-  id: '__root__' | '/' | '/auth' | '/pricing' | '/api/generate-abstract'
+  to:
+    | '/'
+    | '/auth'
+    | '/pricing'
+    | '/api/chemical-lookup'
+    | '/api/generate-abstract'
+    | '/api/reaction-validate'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/pricing'
+    | '/api/chemical-lookup'
+    | '/api/generate-abstract'
+    | '/api/reaction-validate'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   PricingRoute: typeof PricingRoute
+  ApiChemicalLookupRoute: typeof ApiChemicalLookupRoute
   ApiGenerateAbstractRoute: typeof ApiGenerateAbstractRoute
+  ApiReactionValidateRoute: typeof ApiReactionValidateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -92,11 +131,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/chemical-lookup': {
+      id: '/api/chemical-lookup'
+      path: '/api/chemical-lookup'
+      fullPath: '/api/chemical-lookup'
+      preLoaderRoute: typeof ApiChemicalLookupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/generate-abstract': {
       id: '/api/generate-abstract'
       path: '/api/generate-abstract'
       fullPath: '/api/generate-abstract'
       preLoaderRoute: typeof ApiGenerateAbstractRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/reaction-validate': {
+      id: '/api/reaction-validate'
+      path: '/api/reaction-validate'
+      fullPath: '/api/reaction-validate'
+      preLoaderRoute: typeof ApiReactionValidateRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -106,7 +159,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   PricingRoute: PricingRoute,
+  ApiChemicalLookupRoute: ApiChemicalLookupRoute,
   ApiGenerateAbstractRoute: ApiGenerateAbstractRoute,
+  ApiReactionValidateRoute: ApiReactionValidateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

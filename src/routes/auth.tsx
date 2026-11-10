@@ -18,13 +18,13 @@ export const Route = createFileRoute("/auth")({
   }),
   head: () => ({
     meta: [
-      { title: "Log in or sign up — ChemAbstract" },
+      { title: "Log in or sign up — ChemStudio" },
       {
         name: "description",
         content:
-          "Create a free ChemAbstract account to save your graphical abstracts and get more free generations each day.",
+          "Create a free ChemStudio account to save your reaction schemes, graphical abstracts, and 3D structures.",
       },
-      { property: "og:title", content: "Log in or sign up — ChemAbstract" },
+      { property: "og:title", content: "Log in or sign up — ChemStudio" },
       {
         property: "og:description",
         content: "Save your graphical abstracts and unlock more free generations each day.",

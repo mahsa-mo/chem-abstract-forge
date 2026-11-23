@@ -6,6 +6,8 @@
 
 import { lookupPubChemUniversal, type PubChemCompound } from "./pubchem-service";
 import { validateSmiles, type SmilesValidationResult } from "./smiles-validator";
+import { findFormulasInText, parseFormula } from "./chem-core/formula";
+import { checkBalance } from "./chem-core/balance";
 import {
   extractChemicalReactionWithAI,
   type ExtractedReactionCascade,
@@ -39,6 +41,7 @@ export interface ReactionConditions {
   light?: string | undefined;
   atmosphere?: string | undefined;
   catalystLoading?: string | undefined;
+  yieldPercent?: number | undefined;
 }
 
 export interface AtomAuditItem {
@@ -239,6 +242,139 @@ const COMMON_REAGENTS_DB: Record<
     nameFa: "پالمیتیک اسید",
     cid: 985,
   },
+  co2: {
+    formula: "CO2",
+    mw: 44.01,
+    smiles: "O=C=O",
+    nameFa: "کربن دی‌اکسید",
+    cid: 280,
+  },
+  "carbon dioxide": {
+    formula: "CO2",
+    mw: 44.01,
+    smiles: "O=C=O",
+    nameFa: "کربن دی‌اکسید",
+    cid: 280,
+  },
+  methanol: {
+    formula: "CH3OH",
+    mw: 32.04,
+    smiles: "CO",
+    nameFa: "متانول",
+    cid: 887,
+  },
+  ch3oh: {
+    formula: "CH3OH",
+    mw: 32.04,
+    smiles: "CO",
+    nameFa: "متانول",
+    cid: 887,
+  },
+  ethanol: {
+    formula: "C2H5OH",
+    mw: 46.07,
+    smiles: "CCO",
+    nameFa: "اتانول",
+    cid: 702,
+  },
+  methane: {
+    formula: "CH4",
+    mw: 16.04,
+    smiles: "C",
+    nameFa: "متان",
+    cid: 297,
+  },
+  ammonia: {
+    formula: "NH3",
+    mw: 17.03,
+    smiles: "N",
+    nameFa: "آمونیاک",
+    cid: 222,
+  },
+  benzene: {
+    formula: "C6H6",
+    mw: 78.11,
+    smiles: "c1ccccc1",
+    nameFa: "بنزن",
+    cid: 241,
+  },
+  toluene: {
+    formula: "C7H8",
+    mw: 92.14,
+    smiles: "Cc1ccccc1",
+    nameFa: "تولوئن",
+    cid: 1140,
+  },
+  phenol: {
+    formula: "C6H6O",
+    mw: 94.11,
+    smiles: "Oc1ccccc1",
+    nameFa: "فنول",
+    cid: 996,
+  },
+  aniline: {
+    formula: "C6H7N",
+    mw: 93.13,
+    smiles: "Nc1ccccc1",
+    nameFa: "آنیلین",
+    cid: 6115,
+  },
+  acetone: {
+    formula: "C3H6O",
+    mw: 58.08,
+    smiles: "CC(=O)C",
+    nameFa: "استون",
+    cid: 180,
+  },
+  benzaldehyde: {
+    formula: "C7H6O",
+    mw: 106.12,
+    smiles: "O=Cc1ccccc1",
+    nameFa: "بنزآلدهید",
+    cid: 240,
+  },
+  "benzoic acid": {
+    formula: "C7H6O2",
+    mw: 122.12,
+    smiles: "O=C(O)c1ccccc1",
+    nameFa: "بنزوئیک اسید",
+    cid: 243,
+  },
+  styrene: {
+    formula: "C8H8",
+    mw: 104.15,
+    smiles: "C=Cc1ccccc1",
+    nameFa: "استایرن",
+    cid: 7501,
+  },
+  "sulfuric acid": {
+    formula: "H2SO4",
+    mw: 98.08,
+    smiles: "OS(=O)(=O)O",
+    nameFa: "سولفوریک اسید",
+    cid: 1118,
+  },
+  h2so4: {
+    formula: "H2SO4",
+    mw: 98.08,
+    smiles: "OS(=O)(=O)O",
+    nameFa: "سولفوریک اسید",
+    cid: 1118,
+  },
+  "ethyl acetate": {
+    formula: "C4H8O2",
+    mw: 88.11,
+    smiles: "CCOC(=O)C",
+    nameFa: "اتیل استات",
+    cid: 8857,
+  },
+  "ethyl benzoate": {
+    formula: "C9H10O2",
+    mw: 150.18,
+    smiles: "CCOC(=O)c1ccccc1",
+    nameFa: "اتیل بنزوات",
+    cid: 7165,
+  },
 };
 
 export interface NamedReactionEntry {
@@ -381,6 +517,213 @@ export const NAMED_REACTIONS_DB: NamedReactionEntry[] = [
       time: "2 h",
       solvent: "Benzene / Toluene",
       yieldPercent: 94,
+    },
+  },
+  {
+    id: "aspirin-acetylation",
+    keywords: [
+      "salicylic acid",
+      "سالیسیلیک اسید",
+      "اسید سالیسیلیک",
+      "سنتز آسپرین",
+      "acetylsalicylic",
+    ],
+    title: "Acid-Catalyzed Acetylation of Salicylic Acid (Aspirin Synthesis)",
+    titleFa: "سنتز آسپرین (استیلاسیون اسید سالیسیلیک با استیک انیدرید)",
+    category: "Acyl Substitution & Esterification",
+    domain: "organic-synthesis",
+    summary:
+      "Acid-catalyzed O-acetylation of salicylic acid with acetic anhydride affording acetylsalicylic acid (aspirin) and acetic acid.",
+    summaryFa:
+      "استیلاسیون گروه فنولی اسید سالیسیلیک با استیک انیدرید در حضور کاتالیزور سولفوریک اسید و تولید آسپرین.",
+    reactants: [
+      {
+        id: "r1",
+        name: "Salicylic Acid",
+        nameFa: "اسید سالیسیلیک",
+        role: "reactant",
+        formula: "C7H6O3",
+        smiles: "Oc1ccccc1C(=O)O",
+        mw: 138.12,
+        equiv: 1.0,
+      },
+      {
+        id: "r2",
+        name: "Acetic Anhydride",
+        nameFa: "استیک انیدرید",
+        role: "reactant",
+        formula: "C4H6O3",
+        smiles: "CC(=O)OC(=O)C",
+        mw: 102.09,
+        equiv: 1.5,
+      },
+    ],
+    reagents: [],
+    catalysts: [
+      {
+        id: "cat1",
+        name: "Conc. H2SO4",
+        nameFa: "سولفوریک اسید غلیظ",
+        role: "catalyst",
+        formula: "H2SO4",
+        mw: 98.08,
+      },
+    ],
+    products: [
+      {
+        id: "p1",
+        name: "Acetylsalicylic Acid (Aspirin)",
+        nameFa: "استیل‌سالیسیلیک اسید (آسپرین)",
+        role: "product",
+        formula: "C9H8O4",
+        smiles: "CC(=O)Oc1ccccc1C(=O)O",
+        mw: 180.16,
+        yieldPercent: 90,
+      },
+      {
+        id: "p2",
+        name: "Acetic Acid",
+        nameFa: "استیک اسید (محصول جانبی)",
+        role: "byproduct",
+        formula: "C2H4O2",
+        smiles: "CC(=O)O",
+        mw: 60.05,
+      },
+    ],
+    conditions: {
+      temperature: "85 °C (Reflux)",
+      time: "30 min",
+      solvent: "Neat / Ac2O",
+      yieldPercent: 90,
+    },
+  },
+  {
+    id: "photoredox-alkylation",
+    keywords: ["photoredox", "quinuclidine", "diethyl bromomalonate", "فتوردوکس"],
+    title: "Visible-Light Photoredox α-C–H Alkylation of Quinuclidine",
+    titleFa: "عامل‌دارکردن فتوردوکس کینوکلیدین با دی‌اتیل برومومالونات",
+    category: "Photoredox Catalysis",
+    domain: "catalytic-cycle",
+    summary:
+      "450 nm Blue LED Ir(III)-catalyzed α-amino C–H coupling of quinuclidine with diethyl bromomalonate in MeCN.",
+    summaryFa:
+      "جفت‌شدن فتوردوکس تحت تابش LED آبی ۴۵۰ نانومتر با کاتالیزور ایریدیم در حلال استونیتریل.",
+    reactants: [
+      {
+        id: "r1",
+        name: "Quinuclidine",
+        nameFa: "کینوکلیدین",
+        role: "reactant",
+        formula: "C7H13N",
+        smiles: "C1CN2CCC1CC2",
+        mw: 111.18,
+        equiv: 1.0,
+      },
+      {
+        id: "r2",
+        name: "Diethyl Bromomalonate",
+        nameFa: "دی‌اتیل برومومالونات",
+        role: "reactant",
+        formula: "C7H11BrO4",
+        smiles: "CCOC(=O)C(Br)C(=O)OCC",
+        mw: 239.06,
+        equiv: 1.2,
+      },
+    ],
+    reagents: [],
+    catalysts: [
+      {
+        id: "cat1",
+        name: "[Ir(dF(CF3)ppy)2(dtbbpy)]PF6",
+        nameFa: "فتوکاتالیست ایریدیم (1 mol%)",
+        role: "catalyst",
+        formula: "Ir(III) Photocatalyst",
+        molPercent: 1,
+        mw: 1121.9,
+      },
+    ],
+    products: [
+      {
+        id: "p1",
+        name: "α-Alkylated Quinuclidine Malonate",
+        nameFa: "محصول آلفا-آلکیله شده کینوکلیدین",
+        role: "product",
+        formula: "C14H23NO4",
+        smiles: "CCOC(=O)C(C(=O)OCC)C1CC2CCN1CC2",
+        mw: 269.34,
+        yieldPercent: 86,
+      },
+    ],
+    conditions: {
+      temperature: "RT (25 °C)",
+      light: "450 nm Blue LED",
+      solvent: "Acetonitrile (MeCN)",
+      yieldPercent: 86,
+    },
+  },
+  {
+    id: "proline-aldol",
+    keywords: ["aldol", "آلدول", "l-proline", "4-nitrobenzaldehyde"],
+    title: "L-Proline-Catalyzed Asymmetric Direct Aldol Reaction",
+    titleFa: "واکنش آلدول مستقیم نامتقارن با کاتالیزور ال-پرولین",
+    category: "Asymmetric Organocatalysis",
+    domain: "organic-synthesis",
+    summary:
+      "Enantioselective direct aldol addition of cyclohexanone to 4-nitrobenzaldehyde catalyzed by L-proline (20 mol%).",
+    summaryFa: "افزایش آلدول انانتیوگزین سیکلوهگزانون به ۴-نیتروبنزآلدئید در حضور ال-پرولین.",
+    reactants: [
+      {
+        id: "r1",
+        name: "Cyclohexanone",
+        nameFa: "سیکلوهگزانون",
+        role: "reactant",
+        formula: "C6H10O",
+        smiles: "O=C1CCCCC1",
+        mw: 98.14,
+        equiv: 2.0,
+      },
+      {
+        id: "r2",
+        name: "4-Nitrobenzaldehyde",
+        nameFa: "۴-نیتروبنزآلدئید",
+        role: "reactant",
+        formula: "C7H5NO3",
+        smiles: "O=Cc1ccc([N+](=O)[O-])cc1",
+        mw: 151.12,
+        equiv: 1.0,
+      },
+    ],
+    reagents: [],
+    catalysts: [
+      {
+        id: "cat1",
+        name: "L-Proline",
+        nameFa: "ال-پرولین (ارگانوکاتالیست)",
+        role: "catalyst",
+        formula: "C5H9NO2",
+        smiles: "O=C(O)[C@@H]1CCCN1",
+        molPercent: 20,
+        mw: 115.13,
+      },
+    ],
+    products: [
+      {
+        id: "p1",
+        name: "(2S,1'R)-2-(Hydroxy(4-nitrophenyl)methyl)cyclohexan-1-one",
+        nameFa: "محصول کایرال بتا-هیدروکسی کتون (96% ee)",
+        role: "product",
+        formula: "C13H15NO4",
+        smiles: "O=C1CCCCC1[C@@H](O)c1ccc([N+](=O)[O-])cc1",
+        mw: 249.26,
+        yieldPercent: 88,
+        eePercent: 96,
+      },
+    ],
+    conditions: {
+      temperature: "25 °C",
+      time: "24 h",
+      solvent: "DMSO",
+      yieldPercent: 88,
     },
   },
   {
@@ -647,52 +990,14 @@ export function findNamedReaction(text: string): NamedReactionEntry | null {
  * Extract elemental counts from simple formula like C7H7BrO
  */
 function extractElementsFromFormula(formula: string): Record<string, number> {
-  const counts: Record<string, number> = {};
-  const regex = /([A-Z][a-z]*)(\d*)/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(formula)) !== null) {
-    if (!match[1]) continue;
-    const el = match[1];
-    const n = match[2] ? parseInt(match[2], 10) : 1;
-    counts[el] = (counts[el] || 0) + n;
-  }
-  return counts;
+  const parsed = parseFormula(formula);
+  return parsed.ok ? Object.fromEntries(parsed.counts) : {};
 }
 
-const ATOMIC_WEIGHTS: Record<string, number> = {
-  H: 1.008,
-  C: 12.011,
-  N: 14.007,
-  O: 15.999,
-  F: 18.998,
-  Na: 22.99,
-  Mg: 24.305,
-  Al: 26.982,
-  Si: 28.085,
-  P: 30.974,
-  S: 32.06,
-  Cl: 35.45,
-  K: 39.098,
-  Ca: 40.078,
-  Ti: 47.867,
-  Fe: 55.845,
-  Cu: 63.546,
-  Zn: 65.38,
-  Br: 79.904,
-  I: 126.904,
-};
-
 function estimateFormulaMw(formula: string): number {
-  try {
-    const counts = extractElementsFromFormula(formula);
-    let total = 0;
-    for (const [el, n] of Object.entries(counts)) {
-      total += (ATOMIC_WEIGHTS[el] || 12.0) * n;
-    }
-    return total > 0 ? parseFloat(total.toFixed(2)) : 120.0;
-  } catch {
-    return 120.0;
-  }
+  const parsed = parseFormula(formula);
+  if (parsed.ok) return parseFloat(parsed.mw.toFixed(2));
+  return 120.0;
 }
 
 interface LocalDynamicExtraction {
@@ -710,31 +1015,44 @@ interface LocalDynamicExtraction {
  * Universal NLP & Chemical Entity Parser for Arbitrary Texts (Persian/English/Mixed)
  * Strictly extracts real terms, compounds, and directions without hardcoding fake archetypes.
  */
+function hasBoundaryKeyword(text: string, words: string[]): boolean {
+  const lower = text.toLowerCase();
+  return words.some((w) => {
+    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (/^[a-z0-9\-().]+$/i.test(w)) {
+      return new RegExp(`(?:^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`, "i").test(lower);
+    }
+    return new RegExp(`(?:^|[\\s،.؛:!?«»()\\[\\]])${escaped}(?=$|[\\s،.؛:!?«»()\\[\\]])`).test(
+      lower,
+    );
+  });
+}
+
 function extractEntitiesFromTextLocally(
   cleanText: string,
   yieldVal?: number,
 ): LocalDynamicExtraction {
-  const lower = cleanText.toLowerCase();
+  const normalizedText = cleanText.replace(/^[,،.;:\s]+/, "").trim();
+  const lower = normalizedText.toLowerCase();
 
   // 1. Dynamic Domain & Category Classification
   let category = "General Synthetic Chemistry";
   let domain = "general-chemistry";
 
   if (
-    (lower.includes("خر") ||
-      lower.includes("اسب") ||
-      lower.includes("چمن") ||
-      lower.includes("meadow") ||
-      lower.includes("grass") ||
-      lower.includes("donkey") ||
-      lower.includes("pasture")) &&
-    (lower.includes("متان") ||
-      lower.includes("methane") ||
-      lower.includes("پلی") ||
-      lower.includes("poly") ||
-      lower.includes("حرکت") ||
-      lower.includes("transport") ||
-      lower.includes("gas"))
+    hasBoundaryKeyword(normalizedText, [
+      "خر",
+      "اسب",
+      "چمن",
+      "چمنزار",
+      "meadow",
+      "grass",
+      "donkey",
+      "pasture",
+    ]) &&
+    (hasBoundaryKeyword(normalizedText, ["متان", "methane", "پلی", "حرکت", "transport", "gas"]) ||
+      lower.includes("پلی‌اتیلن") ||
+      lower.includes("polyethylene"))
   ) {
     category = "Bio-Environmental Mass Transport & Macromolecular Capture";
     domain = "environmental-transport";
@@ -761,6 +1079,8 @@ function extractEntitiesFromTextLocally(
     lower.includes("انزیم") ||
     lower.includes("آنزیم") ||
     lower.includes("enzyme") ||
+    lower.includes("cyclooxygenase") ||
+    hasBoundaryKeyword(normalizedText, ["cox-1", "cox-2"]) ||
     lower.includes("kinase") ||
     lower.includes("protease") ||
     lower.includes("receptor") ||
@@ -799,9 +1119,9 @@ function extractEntitiesFromTextLocally(
   }
 
   // 2. Dynamic Title from User's First Meaningful Clause
-  let rawTitle = cleanText.split(/[.\n;،]/)[0]?.trim() || "Target Chemical Transformation";
-  if (rawTitle.length > 75) {
-    rawTitle = rawTitle.slice(0, 72).trim() + "…";
+  let rawTitle = normalizedText.split(/[.\n;،]/)[0]?.trim() || "Target Chemical Transformation";
+  if (rawTitle.length > 78) {
+    rawTitle = rawTitle.slice(0, 75).trim() + "…";
   }
   const title = rawTitle;
 
@@ -819,60 +1139,114 @@ function extractEntitiesFromTextLocally(
     mw: number;
     smiles?: string;
     cid?: number;
+    matchKey: string;
   }[] = [];
+  const seenFormulas = new Set<string>();
   for (const [nameKey, data] of Object.entries(COMMON_REAGENTS_DB)) {
-    if (lower.includes(nameKey) || (data.nameFa && lower.includes(data.nameFa.toLowerCase()))) {
+    const matchedEn =
+      nameKey.length <= 6 ? hasBoundaryKeyword(normalizedText, [nameKey]) : lower.includes(nameKey);
+    const matchedFa = data.nameFa ? lower.includes(data.nameFa.toLowerCase()) : false;
+    if ((matchedEn || matchedFa) && !seenFormulas.has(data.formula)) {
+      seenFormulas.add(data.formula);
       detectedDictEntities.push({
         name: nameKey.charAt(0).toUpperCase() + nameKey.slice(1),
-        nameFa: data.nameFa,
         formula: data.formula,
         mw: data.mw,
-        smiles: data.smiles,
-        cid: data.cid,
+        matchKey: matchedEn ? nameKey : data.nameFa || nameKey,
+        ...(data.nameFa !== undefined ? { nameFa: data.nameFa } : {}),
+        ...(data.smiles !== undefined ? { smiles: data.smiles } : {}),
+        ...(data.cid !== undefined ? { cid: data.cid } : {}),
       });
     }
   }
 
-  // 4. Regex for explicit chemical formulas (e.g., CH4, H2SO4, ZnO, (C2H4)n, NaCl, CO2)
-  const formulaRegex = /\b(?:[A-Z][a-z]?\d*){2,}\b|\b\([A-Za-z0-9]+\)n?\b/g;
-  const formulasFound = Array.from(new Set(cleanText.match(formulaRegex) || [])).filter(
+  // 4. Explicit chemical formulas (e.g., CH4, H2SO4, ZnO, (C2H4)n, NaCl, CO2)
+  const formulasFound = findFormulasInText(normalizedText).filter(
     (f) =>
       !["TOC", "ACS", "NMR", "HPLC", "FTIR", "SEM", "TEM", "UV", "LED", "PBSA", "DPI"].includes(f),
   );
 
   // 5. Directional Splitting for Reactions (Reactants -> Products)
-  const splitKeywords = [
-    "به سمت",
-    "تبدیل به",
-    "منجر به",
-    "سنتز",
-    "تولید",
-    "واکنش با",
-    "جهت تشکیل",
-    "converts to",
-    "yields",
-    "produces",
-    "leads to",
-    "towards",
-    "synthesis of",
-  ];
-  let leftSide = cleanText;
+  let leftSide = normalizedText;
   let rightSide = "";
 
-  for (const kw of splitKeywords) {
-    if (cleanText.includes(kw)) {
-      const parts = cleanText.split(kw);
-      if (parts[0] && parts[1]) {
-        leftSide = parts[0].trim();
-        rightSide = parts.slice(1).join(" ").trim();
-        break;
+  const convertMatch = normalizedText.match(/\bconverting\s+(.+?)\s+(?:to|into)\s+(.+)/i);
+  if (convertMatch?.[1] && convertMatch?.[2]) {
+    leftSide = convertMatch[1].trim();
+    rightSide = convertMatch[2].trim();
+  } else {
+    const splitKeywords = [
+      "به سمت",
+      "تبدیل به",
+      "منجر به",
+      "جهت تشکیل",
+      "تولید",
+      "->",
+      "→",
+      "converts to",
+      "to afford",
+      "affording",
+      "to give",
+      "to produce",
+      "to yield",
+      "to form",
+      "yields",
+      "produces",
+      "leads to",
+      "towards",
+      "synthesis of",
+    ];
+
+    for (const kw of splitKeywords) {
+      const idx = lower.indexOf(kw);
+      if (idx !== -1) {
+        const part0 = normalizedText.slice(0, idx).trim();
+        const part1 = normalizedText.slice(idx + kw.length).trim();
+        if (part0 && part1) {
+          leftSide = part0;
+          rightSide = part1;
+          break;
+        }
       }
     }
   }
 
-  // Add detected dict entities to reactants (or products if in right side)
+  // Add detected dict entities to reactants, catalysts, or products based on context
   for (const ent of detectedDictEntities) {
-    const isProduct = rightSide && rightSide.toLowerCase().includes(ent.name.toLowerCase());
+    const kLower = ent.matchKey.toLowerCase();
+    const isCatalystMention =
+      new RegExp(
+        `${kLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:catalyst|کاتالیزور)`,
+        "i",
+      ).test(normalizedText) ||
+      new RegExp(
+        `(?:catalyst|catalyzed by|کاتالیزور)\\s*[:\\-]?\\s*${kLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+        "i",
+      ).test(normalizedText);
+
+    if (isCatalystMention) {
+      catalysts.push({
+        id: `cat-${ent.name.toLowerCase().replace(/\s+/g, "-")}`,
+        name: ent.name,
+        nameFa: ent.nameFa,
+        role: "catalyst",
+        formula: ent.formula,
+        smiles: ent.smiles,
+        mw: ent.mw,
+        pubchemCid: ent.cid,
+      });
+      continue;
+    }
+
+    const inRight =
+      rightSide &&
+      (rightSide.toLowerCase().includes(kLower) ||
+        rightSide.toLowerCase().includes(ent.formula.toLowerCase()));
+    const inLeft =
+      leftSide &&
+      (leftSide.toLowerCase().includes(kLower) ||
+        leftSide.toLowerCase().includes(ent.formula.toLowerCase()));
+    const isProduct = Boolean(inRight && !inLeft);
     const targetArray = isProduct ? products : reactants;
     targetArray.push({
       id: `ent-${ent.name.toLowerCase().replace(/\s+/g, "-")}`,
@@ -890,22 +1264,47 @@ function extractEntitiesFromTextLocally(
 
   // Add explicit chemical formulas
   for (const f of formulasFound) {
-    if (!reactants.some((r) => r.formula === f) && !products.some((p) => p.formula === f)) {
-      reactants.push({
+    const alreadyPresent =
+      reactants.some((r) => r.formula.toUpperCase() === f.toUpperCase()) ||
+      products.some((p) => p.formula.toUpperCase() === f.toUpperCase()) ||
+      catalysts.some((c) => c.formula.toUpperCase() === f.toUpperCase());
+    if (!alreadyPresent) {
+      const inRight = rightSide && rightSide.includes(f) && !leftSide.includes(f);
+      const targetArray = inRight ? products : reactants;
+      targetArray.push({
         id: `form-${f}`,
         name: f,
         nameFa: f,
-        role: "reactant",
+        role: inRight ? "product" : "reactant",
         formula: f,
         mw: estimateFormulaMw(f),
         equiv: 1.0,
+        yieldPercent: inRight ? yieldVal || 92 : undefined,
+      });
+    }
+  }
+
+  // Extract nano/metal catalysts mentioned in text if no catalysts parsed yet
+  if (catalysts.length === 0) {
+    const nanoCatMatch = normalizedText.match(
+      /(nano-?gold|gold\s+nanoparticles?|au\s+nps?|tio2|pd\/c|pdcl2|نانو\s*طلا)/i,
+    );
+    if (nanoCatMatch?.[1]) {
+      const rawCat = nanoCatMatch[1].trim();
+      const isGold = /gold|au|طلا/i.test(rawCat);
+      catalysts.push({
+        id: "cat-extracted-1",
+        name: isGold ? "Au Nanoparticles" : rawCat,
+        nameFa: isGold ? "نانوکاتالیست طلا" : rawCat,
+        role: "catalyst",
+        formula: isGold ? "Au NPs" : rawCat,
+        mw: isGold ? 196.97 : 150,
       });
     }
   }
 
   // 6. Natural Language Token Parsing if structured entities were sparse
   if (reactants.length === 0) {
-    // Extract clauses / nouns from leftSide
     const phrases = leftSide
       .split(/[,+،و\n]|به همراه|همراه با|در حضور/i)
       .map((p) => p.trim())
@@ -915,7 +1314,7 @@ function extractEntitiesFromTextLocally(
           !["یک", "تعداد", "زیادی", "درحال", "حرکت", "a", "an", "the", "large"].includes(p),
       );
 
-    const phraseList = phrases.length > 0 ? phrases.slice(0, 3) : [cleanText.slice(0, 45)];
+    const phraseList = phrases.length > 0 ? phrases.slice(0, 3) : [normalizedText.slice(0, 45)];
     for (let i = 0; i < phraseList.length; i++) {
       const ph = phraseList[i]!;
       reactants.push({
@@ -952,19 +1351,15 @@ function extractEntitiesFromTextLocally(
     }
   }
 
-  // Guarantee at least 1 authentic product
+  // Guarantee at least 1 clean target product without ugly "Formula*" suffixes
   if (products.length === 0) {
-    const leadReactant = reactants[0]?.nameFa || reactants[0]?.name || "System";
     products.push({
       id: "p-target-authentic",
-      name: `Functionalized / Transformed ${leadReactant}`,
-      nameFa: `سامانه تبدیل‌شده / محصول نهایی (${leadReactant})`,
+      name: "Target Product",
+      nameFa: "محصول هدف",
       role: "product",
-      formula:
-        reactants[0]?.formula && reactants[0].formula !== "Compound"
-          ? `${reactants[0].formula}*`
-          : "Target Complex",
-      mw: (reactants[0]?.mw || 120) + 60,
+      formula: "Target Product",
+      mw: (reactants[0]?.mw || 120) + 40,
       yieldPercent: yieldVal || 90,
     });
   }
@@ -1180,10 +1575,20 @@ export async function parseAndAuditReaction(text: string): Promise<ParsedReactio
     if (!conditions.temperature) conditions.temperature = namedRxn.conditions.temperature;
     if (!conditions.time) conditions.time = namedRxn.conditions.time;
     if (!conditions.solvent) conditions.solvent = namedRxn.conditions.solvent;
+    if (!conditions.light && namedRxn.conditions.light)
+      conditions.light = namedRxn.conditions.light;
     if (!conditions.yieldPercent) conditions.yieldPercent = namedRxn.conditions.yieldPercent;
   } else if (!aiCascade || (reactants.length === 0 && products.length === 0)) {
     // 3. Secondary: Dynamic Heuristic NLP Extraction (100% Text-Grounded)
-    const dynamicExtraction = extractEntitiesFromTextLocally(cleanText);
+    const yieldMatch = cleanText.match(/(\d+)\s*%\s*(?:yield|selectivity)/i);
+    const yieldStr = yieldMatch?.[1];
+    const yieldVal = yieldStr ? parseInt(yieldStr, 10) : undefined;
+
+    const eeMatch = cleanText.match(/(\d+)\s*%\s*(?:ee|enantiomeric\s*excess)/i);
+    const eeStr = eeMatch?.[1];
+    const eeVal = eeStr ? parseInt(eeStr, 10) : undefined;
+
+    const dynamicExtraction = extractEntitiesFromTextLocally(cleanText, yieldVal);
     title = dynamicExtraction.title;
     category = dynamicExtraction.category;
     domain = dynamicExtraction.domain;
@@ -1193,20 +1598,20 @@ export async function parseAndAuditReaction(text: string): Promise<ParsedReactio
     reagents.push(...dynamicExtraction.reagents);
     byproducts.push(...dynamicExtraction.byproducts);
 
-    // 2. Identify Temperature, Time, Solvents, Catalysts via Regex & Semantic Rules
+    if (yieldVal) conditions.yieldPercent = yieldVal;
+    if (eeVal && products[0]) products[0].eePercent = eeVal;
+
     // Temperature
-    const tempMatch = cleanText.match(
-      /(\d+\s*°\s*C|room temperature|rt|reflux|ambient|80\s*°C|25\s*°C)/i,
-    );
+    const tempMatch = cleanText.match(/(\d+\s*°\s*C|room temperature|ambient|reflux|\brt\b)/i);
     if (tempMatch?.[1]) conditions.temperature = tempMatch[1];
 
     // Time
-    const timeMatch = cleanText.match(/(\d+\.?\d*\s*(?:h|hr|hours?|min|minutes?|days?))/i);
+    const timeMatch = cleanText.match(/(\d+\.?\d*\s*(?:h|hr|hours?|min|minutes?|days?))\b/i);
     if (timeMatch?.[1]) conditions.time = timeMatch[1];
 
     // Light / Radiation
     const lightMatch = cleanText.match(
-      /(\d+\s*nm\s*(?:blue\s*led)?|blue\s*led|hν|visible\s*light|uv|microwave)/i,
+      /(\d+\s*nm\s*(?:blue\s*led)?|blue\s*led|hν|visible\s*light|microwave|\buv\b)/i,
     );
     if (lightMatch?.[1]) conditions.light = lightMatch[1];
 
@@ -1215,18 +1620,6 @@ export async function parseAndAuditReaction(text: string): Promise<ParsedReactio
       /(?:in\s+)?(dmf\/h2o\s*\(\d+:\d+\)|acetonitrile|mecn|dmso|dcm|thf|etoh|meoh|toluene|water|dmf)/i,
     );
     if (solventMatch?.[1]) conditions.solvent = solventMatch[1];
-
-    // Yield and ee%
-    const yieldMatch = cleanText.match(/(\d+)\s*%\s*yield/i);
-    const yieldStr = yieldMatch?.[1];
-    const yieldVal = yieldStr ? parseInt(yieldStr, 10) : undefined;
-
-    const eeMatch = cleanText.match(/(\d+)\s*%\s*(?:ee|enantiomeric\s*excess)/i);
-    const eeStr = eeMatch?.[1];
-    const eeVal = eeStr ? parseInt(eeStr, 10) : undefined;
-
-    // 3. Populate Species based on detected archetype or common chemical names
-    // Species already dynamically populated by extractEntitiesFromTextLocally above
   }
 
   // 4. Validate SMILES for each species
@@ -1251,37 +1644,17 @@ export async function parseAndAuditReaction(text: string): Promise<ParsedReactio
       ? parseFloat(((sumReactantsMw - mainProductMw) / mainProductMw).toFixed(2))
       : 0.35;
 
-  // 6. Atom Audit (conservation of C, H, O, N, etc.)
-  const reactantsAtoms: Record<string, number> = {};
-  for (const r of reactants) {
-    const elMap = extractElementsFromFormula(r.formula);
-    const eq = r.equiv || 1;
-    for (const [el, n] of Object.entries(elMap)) {
-      reactantsAtoms[el] = (reactantsAtoms[el] || 0) + n * eq;
-    }
-  }
-
-  const productsAtoms: Record<string, number> = {};
-  for (const p of [...products, ...byproducts]) {
-    const elMap = extractElementsFromFormula(p.formula);
-    for (const [el, n] of Object.entries(elMap)) {
-      productsAtoms[el] = (productsAtoms[el] || 0) + n;
-    }
-  }
-
-  const allElements = Array.from(
-    new Set([...Object.keys(reactantsAtoms), ...Object.keys(productsAtoms)]),
+  // 6. Atom Audit (exact conservation of C, H, O, N, etc. via chem-core/balance)
+  const balanceCheck = checkBalance(
+    reactants.map((r) => ({ formula: r.formula, coefficient: r.equiv || 1 })),
+    [...products, ...byproducts].map((p) => ({ formula: p.formula, coefficient: p.equiv || 1 })),
   );
-  const atomAudit: AtomAuditItem[] = allElements.map((el) => {
-    const rC = Math.round(reactantsAtoms[el] || 0);
-    const pC = Math.round(productsAtoms[el] || 0);
-    return {
-      element: el,
-      reactantsCount: rC,
-      productsCount: pC,
-      balanced: rC === pC || Math.abs(rC - pC) <= 1,
-    };
-  });
+  const atomAudit: AtomAuditItem[] = balanceCheck.elements.map((e) => ({
+    element: e.element,
+    reactantsCount: Math.round(e.left),
+    productsCount: Math.round(e.right),
+    balanced: e.balanced,
+  }));
 
   // 7. Scientific Recommendations & Compliance Checks
   if (atomEconomyPercent >= 75) {

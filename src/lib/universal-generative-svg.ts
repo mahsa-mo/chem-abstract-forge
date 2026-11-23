@@ -19,7 +19,7 @@ const universalSvgCache = new Map<string, { svg: string; timestamp: number }>();
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
 
 function resolveGeminiApiKey(): string | undefined {
-  const envKey = process.env["GEMINI_API_KEY"] || process.env["VITE_GEMINI_API_KEY"];
+  const envKey = process.env["GEMINI_API_KEY"];
   if (envKey && envKey !== "MY_GEMINI_API_KEY" && envKey.trim().length > 10) {
     return envKey.trim();
   }
@@ -35,7 +35,7 @@ function resolveGeminiApiKey(): string | undefined {
       if (fs.existsSync(envPath)) {
         const content = fs.readFileSync(envPath, "utf-8");
         for (const line of content.split("\n")) {
-          const match = line.match(/^(?:VITE_)?GEMINI_API_KEY=(.+)$/);
+          const match = line.match(/^GEMINI_API_KEY=(.+)$/);
           if (match && match[1] && match[1].trim() !== "MY_GEMINI_API_KEY") {
             const key = match[1].trim();
             if (typeof process !== "undefined" && process.env) {

@@ -14,9 +14,20 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    optimizeDeps: {
+      include: [
+        "@tanstack/react-query",
+        "@supabase/supabase-js",
+        "lucide-react",
+        "sonner",
+        "clsx",
+        "tailwind-merge",
+      ],
+    },
     plugins: [
       VitePWA({
         registerType: "autoUpdate",
+        injectRegister: null,
         includeAssets: ["favicon.ico", "robots.txt", "sitemap.xml"],
         manifest: {
           id: "/",
@@ -37,13 +48,20 @@ export default defineConfig({
             },
           ],
         },
+        workbox: {
+          navigateFallback: null,
+          globDirectory: "dist/client",
+          globPatterns: ["**/*.{js,css,ico,png,svg,woff,woff2}"],
+        },
         devOptions: {
           enabled: true,
+          type: "module",
+          suppressWarnings: true,
         },
       }),
     ],
     build: {
-      rollupOptions: {
+      rolldownOptions: {
         onwarn(warning, warn) {
           if (
             warning.code === "MODULE_LEVEL_DIRECTIVE" ||

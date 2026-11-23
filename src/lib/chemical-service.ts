@@ -321,19 +321,35 @@ export const COMMON_COMPOUNDS: Record<string, ChemicalCompoundData> = {
   },
 };
 
-export async function lookupChemicalCompound(query: string): Promise<ChemicalCompoundData | null> {
-  const cleanQuery = query.trim().toLowerCase();
+function normalizeChemicalLookupQuery(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[_\-\s]+/g, " ")
+    .trim();
+}
 
-  // 1. Check local fast-cache
+export async function lookupChemicalCompound(query: string): Promise<ChemicalCompoundData | null> {
+  const normQuery = normalizeChemicalLookupQuery(query);
+  if (!normQuery) return null;
+
+  // 1. Check local fast-cache using exact normalized matching (no substring matching)
   for (const [key, data] of Object.entries(COMMON_COMPOUNDS)) {
-    if (
-      cleanQuery === key ||
-      cleanQuery.includes(key) ||
-      data.name_en.toLowerCase().includes(cleanQuery) ||
-      data.name_fa.includes(cleanQuery) ||
-      data.formula.toLowerCase() === cleanQuery ||
-      data.cas === cleanQuery
-    ) {
+    const faParts = data.name_fa
+      .split(/[()]/)
+      .map((part) => normalizeChemicalLookupQuery(part))
+      .filter(Boolean);
+
+    const exactCandidates = [
+      normalizeChemicalLookupQuery(key),
+      normalizeChemicalLookupQuery(data.name_en),
+      normalizeChemicalLookupQuery(data.name_fa),
+      ...faParts,
+      normalizeChemicalLookupQuery(data.formula),
+      ...(data.cas ? [normalizeChemicalLookupQuery(data.cas)] : []),
+    ];
+
+    if (exactCandidates.includes(normQuery)) {
       return data;
     }
   }
@@ -372,7 +388,7 @@ export async function lookupChemicalCompound(query: string): Promise<ChemicalCom
   }
 
   // 3. Query Gemini for multilingual & complex parsing
-  const geminiKey = process.env["GEMINI_API_KEY"];
+  const geminiKey = typeof process !== "undefined" ? process.env["GEMINI_API_KEY"] : undefined;
   if (!geminiKey) return null;
 
   const prompt = [

@@ -164,11 +164,13 @@ export async function generateAbstractImage(
       context?.journal ?? "acs",
       context?.colorScheme ?? "academic-clean",
     );
-    return {
-      b64_json: Buffer.from(svg, "utf-8").toString("base64"),
-      mimeType: "image/svg+xml",
-      provider: "chemdraw-vector",
-    };
+    if (svg) {
+      return {
+        b64_json: Buffer.from(svg, "utf-8").toString("base64"),
+        mimeType: "image/svg+xml",
+        provider: "chemdraw-vector",
+      };
+    }
   }
 
   throw new ProviderError("All image generation providers were temporarily unavailable", 502);

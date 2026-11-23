@@ -160,15 +160,19 @@ const MODELS_PRIORITY = [
 const extractionCache = new Map<string, { res: ExtractedReactionCascade; exp: number }>();
 
 function getGeminiApiKey(): string | undefined {
+  if (typeof process === "undefined") {
+    return undefined;
+  }
   const envKey = process.env["GEMINI_API_KEY"];
   if (envKey && envKey !== "MY_GEMINI_API_KEY" && envKey.trim().length > 10) {
     return envKey.trim();
   }
+  const cwd = typeof process.cwd === "function" ? process.cwd() : ".";
   const searchPaths = [
     ".env",
     "/app/applet/.env",
     "/app/applet/app/applet/.env",
-    path.resolve(process.cwd(), ".env"),
+    path.resolve(cwd, ".env"),
   ];
   for (const envPath of searchPaths) {
     try {
@@ -178,7 +182,7 @@ function getGeminiApiKey(): string | undefined {
           const match = line.match(/^GEMINI_API_KEY=(.+)$/);
           if (match && match[1] && match[1].trim() !== "MY_GEMINI_API_KEY") {
             const key = match[1].trim();
-            if (typeof process !== "undefined" && process.env) {
+            if (process.env) {
               process.env["GEMINI_API_KEY"] = key;
             }
             return key;
@@ -206,25 +210,6 @@ export async function extractChemicalReactionWithAI(
   }
 
   const apiKey = getGeminiApiKey();
-  try {
-    fs.writeFileSync(
-      "./user-inputs.log",
-      `\n==============================\n[${new Date().toISOString()}] (len: ${text.length})\n${text}\n==============================\n`,
-      { flag: "a" },
-    );
-    fs.writeFileSync(
-      "/tmp/user-input.log",
-      `\n==============================\n[${new Date().toISOString()}] (len: ${text.length})\n${text}\n==============================\n`,
-      { flag: "a" },
-    );
-    fs.writeFileSync(
-      "/tmp/ai-extractor.log",
-      `[${new Date().toISOString()}] apiKey prefix: ${apiKey ? apiKey.slice(0, 8) : "NONE"}, text length: ${text.length}\n`,
-      { flag: "a" },
-    );
-  } catch {
-    /* ignore */
-  }
   if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || text.trim().length < 5) {
     return null;
   }
@@ -509,15 +494,6 @@ Strict Universal Guidelines:
       extractionCache.set(cacheKey, { res: parsed, exp: Date.now() + 15 * 60 * 1000 });
       return parsed;
     } catch (err) {
-      try {
-        fs.writeFileSync(
-          "/tmp/ai-extractor.log",
-          `[${new Date().toISOString()}] Model ${model} error: ${err instanceof Error ? err.stack : String(err)}\n`,
-          { flag: "a" },
-        );
-      } catch {
-        /* ignore */
-      }
       console.warn(
         `[ai-chemical-extractor] Model ${model} encountered an error:`,
         err instanceof Error ? err.message : err,
@@ -538,7 +514,9 @@ async function enrichSpeciesWithPubChem(speciesList?: ExtractedChemicalEntity[])
       try {
         const pubchem = await lookupPubChemUniversal(item.name);
         if (pubchem) {
-          if (!item.smiles && pubchem.smiles) item.smiles = pubchem.smiles;
+          // PubChemCompound exposes canonicalSmiles / isomericSmiles, never `.smiles`.
+          const pubchemSmiles = pubchem.isomericSmiles || pubchem.canonicalSmiles;
+          if (!item.smiles && pubchemSmiles) item.smiles = pubchemSmiles;
           if (!item.mw && pubchem.molecularWeight) item.mw = pubchem.molecularWeight;
           if (!item.formula && pubchem.molecularFormula) item.formula = pubchem.molecularFormula;
         }

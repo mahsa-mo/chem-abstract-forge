@@ -131,16 +131,20 @@ export function MolecularDrawer2D({ onSendToStudio, onSendImageToEditor }: Molec
   function handleUndo() {
     if (historyIdx > 0) {
       const nextIdx = historyIdx - 1;
+      const target = history[nextIdx];
+      if (!target) return;
       setHistoryIdx(nextIdx);
-      setSmilesText(graphToSmiles(history[nextIdx]));
+      setSmilesText(graphToSmiles(target));
     }
   }
 
   function handleRedo() {
     if (historyIdx < history.length - 1) {
       const nextIdx = historyIdx + 1;
+      const target = history[nextIdx];
+      if (!target) return;
       setHistoryIdx(nextIdx);
-      setSmilesText(graphToSmiles(history[nextIdx]));
+      setSmilesText(graphToSmiles(target));
     }
   }
 
@@ -167,7 +171,7 @@ export function MolecularDrawer2D({ onSendToStudio, onSendImageToEditor }: Molec
       .filter(Boolean) as ChemAtom[];
 
     let angle = -Math.PI / 6; // default 30° up-right
-    if (neighbors.length === 1) {
+    if (neighbors.length === 1 && neighbors[0]) {
       const n = neighbors[0];
       const inAngle = Math.atan2(atom.y - n.y, atom.x - n.x);
       angle = inAngle + Math.PI / 3;
@@ -212,6 +216,7 @@ export function MolecularDrawer2D({ onSendToStudio, onSendImageToEditor }: Molec
       const sproutPos = getSproutPosition(atom);
       const ringGraph = generateRingTemplate(tool.ringType, sproutPos.x, sproutPos.y);
       const closestRingAtom = ringGraph.atoms[0];
+      if (!closestRingAtom) return;
       pushGraph({
         atoms: [...graph.atoms, ...ringGraph.atoms],
         bonds: [

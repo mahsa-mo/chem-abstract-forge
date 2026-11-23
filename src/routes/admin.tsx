@@ -97,17 +97,17 @@ function AdminPage() {
       if (abstractData) {
         setAbstracts(
           abstractData.map((a: Record<string, unknown>) => ({
-            id: String(a.id ?? ""),
-            user_id: String(a.user_id ?? ""),
+            id: String(a["id"] ?? ""),
+            user_id: String(a["user_id"] ?? ""),
             title: String(
-              a.title ||
-                (typeof a.source_text === "string" ? a.source_text.slice(0, 45) : "") ||
+              a["title"] ||
+                (typeof a["source_text"] === "string" ? a["source_text"].slice(0, 45) : "") ||
                 "Graphical Abstract",
             ),
-            source_text: String(a.source_text || a.text || ""),
-            image_url: String(a.url || a.image_url || a.data_url || ""),
-            created_at: String(a.created_at ?? ""),
-            provider: String(a.provider || "gemini"),
+            source_text: String(a["source_text"] || a["text"] || ""),
+            image_url: String(a["url"] || a["image_url"] || a["data_url"] || ""),
+            created_at: String(a["created_at"] ?? ""),
+            provider: String(a["provider"] || "gemini"),
           })),
         );
       }
@@ -117,15 +117,17 @@ function AdminPage() {
       if (profilesData && profilesData.length > 0) {
         setUsers(
           profilesData.map((p: Record<string, unknown>) => ({
-            id: String(p.id ?? ""),
+            id: String(p["id"] ?? ""),
             email:
-              String(p.email || "") ||
-              (p.id === user?.id ? user?.email : `user_${String(p.id ?? "").slice(0, 6)}@user.com`),
-            display_name: String(p.display_name || p.full_name || "Research Scientist"),
-            created_at: String(p.created_at || new Date().toISOString()),
-            plan: String(p.plan || "free"),
-            daily_used: typeof p.daily_used === "number" ? p.daily_used : 1,
-            daily_limit: typeof p.daily_limit === "number" ? p.daily_limit : 3,
+              String(p["email"] || "") ||
+              (p["id"] === user?.id
+                ? user?.email || ""
+                : `user_${String(p["id"] ?? "").slice(0, 6)}@user.com`),
+            display_name: String(p["display_name"] || p["full_name"] || "Research Scientist"),
+            created_at: String(p["created_at"] || new Date().toISOString()),
+            plan: String(p["plan"] || "free"),
+            daily_used: typeof p["daily_used"] === "number" ? p["daily_used"] : 1,
+            daily_limit: typeof p["daily_limit"] === "number" ? p["daily_limit"] : 3,
           })),
         );
       } else {

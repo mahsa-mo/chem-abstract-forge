@@ -18,6 +18,7 @@ export type Profile = {
   display_name: string | null;
   avatar_url: string | null;
   plan: string;
+  role?: string | null | undefined;
 };
 
 type AuthCtx = {

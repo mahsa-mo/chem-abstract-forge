@@ -36,23 +36,6 @@ export const Route = createFileRoute("/api/reaction-validate")({
 
           // 3. Complete reaction audit
           const text = body.text || "";
-          if (text) {
-            try {
-              const fs = await import("node:fs");
-              fs.writeFileSync(
-                "./user-inputs.log",
-                `\n[VALIDATE ${new Date().toISOString()}] (len: ${text.length})\n${text}\n`,
-                { flag: "a" },
-              );
-              fs.writeFileSync(
-                "/tmp/user-input.log",
-                `\n[VALIDATE ${new Date().toISOString()}] (len: ${text.length})\n${text}\n`,
-                { flag: "a" },
-              );
-            } catch {
-              /* ignore */
-            }
-          }
           const audit = await parseAndAuditReaction(text);
 
           return new Response(JSON.stringify({ success: true, audit }), {

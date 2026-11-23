@@ -99,9 +99,9 @@ export function ChemicalReactionValidator({
       try {
         const res = await parseAndAuditReaction(textToAnalyze);
         setAudit(res);
-        if (res.reactants.length > 0) {
+        if (res.reactants[0]) {
           setSelectedSpecies(res.reactants[0]);
-        } else if (res.products.length > 0) {
+        } else if (res.products[0]) {
           setSelectedSpecies(res.products[0]);
         }
       } catch (err) {

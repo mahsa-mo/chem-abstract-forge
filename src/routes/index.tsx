@@ -74,7 +74,7 @@ const SAMPLE_REACTIONS = [
   {
     key: "workspace.preset.cox",
     title: "Aspirin & COX-1/COX-2 Pathway",
-    text: ", aspirin functions as an acetylating agent, which effectively deactivates the enzymes, thereby inhibiting the production of prostaglandins. With a decreased concentration of prostaglandins, the onset of inflammation is slowed, and fevers are reduced. More recently, it has been discovered that there are two different kinds of cyclooxygenase enzymes, called COX-1 and COX-2. The primary function of COX-2 is to catalyze the synthesis of prostaglandins that cause inflammation and pain, while the primary function of COX-1 is to catalyze the synthesis of prostaglandins that stimulate the production of mucus that protects the stomach lining from concentrated hydrochloric acid. NSAIDs inhibit the action of both COX-1 and COX-2 enzymes, and it has been discovered that the inhibition of COX-1 can block the formation of this mucus and result in gastric irritation or an ulcer. This understanding instigated an intensive search for therapeutic agents capable of selectively inhibiting COX-2 without also inhibiting COX-1. Extensive research efforts culminated in the release of several COX-2 inhibitors on the market in the late 1990s.",
+    text: "Aspirin functions as an acetylating agent, which effectively deactivates the enzymes, thereby inhibiting the production of prostaglandins. With a decreased concentration of prostaglandins, the onset of inflammation is slowed, and fevers are reduced. More recently, it has been discovered that there are two different kinds of cyclooxygenase enzymes, called COX-1 and COX-2. The primary function of COX-2 is to catalyze the synthesis of prostaglandins that cause inflammation and pain, while the primary function of COX-1 is to catalyze the synthesis of prostaglandins that stimulate the production of mucus that protects the stomach lining from concentrated hydrochloric acid. NSAIDs inhibit the action of both COX-1 and COX-2 enzymes, and it has been discovered that the inhibition of COX-1 can block the formation of this mucus and result in gastric irritation or an ulcer. This understanding instigated an intensive search for therapeutic agents capable of selectively inhibiting COX-2 without also inhibiting COX-1. Extensive research efforts culminated in the release of several COX-2 inhibitors on the market in the late 1990s.",
   },
   {
     key: "workspace.preset.coupling",
@@ -178,9 +178,12 @@ function LoadingState() {
 /** Daily-quota bookkeeping row — unchanged, originals only. */
 async function saveAbstract(userId: string, dataUrl: string, text: string) {
   const blob = await (await fetch(dataUrl)).blob();
-  const path = `${userId}/${Date.now()}.png`;
+  const isSvg = blob.type.includes("svg") || dataUrl.startsWith("data:image/svg+xml");
+  const ext = isSvg ? "svg" : "png";
+  const contentType = isSvg ? "image/svg+xml" : blob.type || "image/png";
+  const path = `${userId}/${Date.now()}.${ext}`;
   const up = await supabase.storage.from("abstracts").upload(path, blob, {
-    contentType: "image/png",
+    contentType,
   });
   await supabase.from("abstracts").insert({
     user_id: userId,
@@ -308,11 +311,16 @@ function Index() {
     if (busy) return;
     setError(null);
     if (text.trim().length < 3) {
-      setError(t("error.tooShort"));
+      const msg = t("error.tooShort");
+      setError(msg);
+      toast.error(msg);
+      textareaRef.current?.focus();
       return;
     }
     if (quotaReached) {
-      setError(t("quota.reached", { max: limit }));
+      const msg = t("quota.reached", { max: limit });
+      setError(msg);
+      toast.error(msg);
       return;
     }
     // Ensure session in background if possible, but never block Guest users
@@ -330,6 +338,7 @@ function Index() {
     setGenerationId(null);
     setRegenUsed(0);
     setEditing(false);
+    setPreviewTab("abstract");
     setEditorState(null);
     outputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     let finalImage: string | null = null;
@@ -345,41 +354,50 @@ function Index() {
         },
         { journal: selectedJournal, colorScheme: selectedColorScheme },
       );
-      if (finalImage) {
-        const journalBadge = JOURNAL_STANDARDS[selectedJournal]?.badge ?? "ACS TOC";
-        if (user) {
+      if (!finalImage) {
+        throw new Error("no_image");
+      }
+
+      const journalBadge = JOURNAL_STANDARDS[selectedJournal]?.badge ?? "ACS TOC";
+      let savedRowId: string | null = null;
+      if (user) {
+        try {
           await saveAbstract(user.id, finalImage, text);
           const row = await createGeneration({ userId: user.id, dataUrl: finalImage, text });
-          setGenerationId(row.id);
-          setRegenUsed(0);
-          saveRecentReaction({
-            id: row.id,
-            title: text.trim().slice(0, 55),
-            sourceText: text.trim(),
-            imageUrl: finalImage,
-            createdAt: new Date().toISOString(),
-            regenCount: 0,
-            tags: [journalBadge, "300 DPI TOC"],
-          });
-        } else {
-          const guestId = `guest-${Date.now()}`;
-          setGenerationId(guestId);
-          setRegenUsed(0);
-          saveRecentReaction({
-            id: guestId,
-            title: text.trim().slice(0, 55),
-            sourceText: text.trim(),
-            imageUrl: finalImage,
-            createdAt: new Date().toISOString(),
-            regenCount: 0,
-            tags: ["Guest Session", journalBadge],
-          });
+          if (row?.id) {
+            savedRowId = row.id;
+          }
+        } catch (persistErr) {
+          console.warn("[handleGenerate] Non-fatal persistence error:", persistErr);
         }
-        setHistoryRefresh((v) => v + 1);
       }
-      await record();
-    } catch {
+
+      const entryId = savedRowId ?? `guest-${Date.now()}`;
+      setGenerationId(entryId);
+      setRegenUsed(0);
+      saveRecentReaction({
+        id: entryId,
+        title: text.trim().slice(0, 55),
+        sourceText: text.trim(),
+        imageUrl: finalImage,
+        createdAt: new Date().toISOString(),
+        regenCount: 0,
+        tags: [
+          savedRowId ? journalBadge : "Guest Session",
+          savedRowId ? "300 DPI TOC" : journalBadge,
+        ],
+      });
+      setHistoryRefresh((v) => v + 1);
+
+      try {
+        await record();
+      } catch (usageErr) {
+        console.warn("[handleGenerate] Non-fatal usage refresh error:", usageErr);
+      }
+    } catch (err) {
+      console.error("[handleGenerate] Generation failed:", err);
       setError(t("error.failed"));
+      toast.error(t("error.failed"));
     } finally {
       setLoading(false);
     }
@@ -403,6 +421,7 @@ function Index() {
     setRegenerating(true);
     setIsFinal(false);
     setEditing(false);
+    setPreviewTab("abstract");
     setEditorState(null);
 
     let finalImage: string | null = null;
@@ -419,20 +438,18 @@ function Index() {
         { journal: selectedJournal, colorScheme: selectedColorScheme },
       );
       if (!finalImage) throw new Error("no_image");
-      if (finalImage) {
-        const journalBadge = JOURNAL_STANDARDS[selectedJournal]?.badge ?? "ACS TOC";
-        saveRecentReaction({
-          id: generationId ? `${generationId}-regen-${Date.now()}` : `regen-${Date.now()}`,
-          title: `${text.trim().slice(0, 45)} (Regeneration)`,
-          sourceText: text.trim(),
-          imageUrl: finalImage,
-          createdAt: new Date().toISOString(),
-          regenCount: (regenUsed || 0) + 1,
-          tags: ["Regenerated", journalBadge],
-        });
-        setHistoryRefresh((v) => v + 1);
-      }
-      if (user && generationId) {
+      const journalBadge = JOURNAL_STANDARDS[selectedJournal]?.badge ?? "ACS TOC";
+      saveRecentReaction({
+        id: generationId ? `${generationId}-regen-${Date.now()}` : `regen-${Date.now()}`,
+        title: `${text.trim().slice(0, 45)} (Regeneration)`,
+        sourceText: text.trim(),
+        imageUrl: finalImage,
+        createdAt: new Date().toISOString(),
+        regenCount: (regenUsed || 0) + 1,
+        tags: ["Regenerated", journalBadge],
+      });
+      setHistoryRefresh((v) => v + 1);
+      if (user && generationId && !generationId.startsWith("guest-")) {
         try {
           await createGeneration({
             userId: user.id,
@@ -447,13 +464,18 @@ function Index() {
             setRegenUsed(REGEN_LIMIT);
             setError(t("regen.exhausted"));
           } else {
-            throw e;
+            console.warn("[handleRegenerate] Non-fatal persistence error:", e);
+            setRegenUsed((v) => Math.min(REGEN_LIMIT, v + 1));
           }
         }
+      } else {
+        setRegenUsed((v) => Math.min(REGEN_LIMIT, v + 1));
       }
-    } catch {
+    } catch (err) {
+      console.error("[handleRegenerate] Regeneration failed:", err);
       setIsFinal(true);
       setError(t("error.failed"));
+      toast.error(t("error.failed"));
     } finally {
       setRegenerating(false);
     }
@@ -710,6 +732,7 @@ function Index() {
                       {/* Primary Action Bar */}
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/60">
                         <Button
+                          type="button"
                           size="lg"
                           onClick={handleGenerate}
                           disabled={busy || quotaReached}

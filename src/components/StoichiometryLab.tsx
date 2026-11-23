@@ -21,6 +21,9 @@ import { useI18n } from "@/lib/i18n";
 import { BufferAndPhLab, VacuumAndGreenChemLab } from "@/components/LabToolsAdvanced";
 import { EquationBalancer } from "@/components/EquationBalancer";
 import { PeriodicCatalystHub } from "@/components/PeriodicCatalystHub";
+import { parseFormula } from "@/lib/chem-core/formula";
+import { atomicWeight } from "@/lib/chem-core/periodic";
+import { expandChemicalAbbreviations } from "@/lib/equation-balancer";
 import { toast } from "sonner";
 
 // Standard IUPAC Atomic Weights
@@ -473,114 +476,24 @@ const ATOMIC_WEIGHTS: Record<
   },
 };
 
-// Expand common chemical shorthand abbreviations before parsing formula
-function expandChemicalAbbreviations(formula: string): string {
-  return formula
-    .replace(/Ph/g, "(C6H5)")
-    .replace(/Me/g, "(CH3)")
-    .replace(/Et/g, "(C2H5)")
-    .replace(/iPr/g, "(C3H7)")
-    .replace(/Pr/g, "(C3H7)")
-    .replace(/tBu/g, "(C4H9)")
-    .replace(/Bu/g, "(C4H9)")
-    .replace(/Ac/g, "(C2H3O)")
-    .replace(/Bn/g, "(C7H7)")
-    .replace(/Bz/g, "(C7H5O)")
-    .replace(/Tf/g, "(CF3SO2)")
-    .replace(/Ts/g, "(C7H7SO2)")
-    .replace(/Boc/g, "(C5H9O2)")
-    .replace(/dba/g, "(C17H14O)")
-    .replace(/ppy/g, "(C11H8N)");
-}
-
-// Parse a chemical formula (supports hydrates like CuSO4.5H2O and nested parentheses like Pd(PPh3)4)
+// Parse a chemical formula (supports hydrates like CuSO4.5H2O, nested brackets, and abbreviations like Pd(PPh3)4)
 export function parseChemicalFormula(rawFormula: string): {
   mw: number;
   composition: { element: string; count: number; mass: number; percent: number }[];
   valid: boolean;
 } {
-  const cleaned = rawFormula.trim().replace(/·/g, ".");
-  if (!cleaned) return { mw: 0, composition: [], valid: false };
-
-  const totalCounts: Record<string, number> = {};
-
-  function parseSegment(segment: string, multiplier: number): boolean {
-    const expanded = expandChemicalAbbreviations(segment.replace(/\[/g, "(").replace(/\]/g, ")"));
-    const stack: { counts: Record<string, number> }[] = [{ counts: {} }];
-    let i = 0;
-
-    while (i < expanded.length) {
-      const ch = expanded[i];
-      if (ch === "(") {
-        stack.push({ counts: {} });
-        i++;
-      } else if (ch === ")") {
-        i++;
-        let numStr = "";
-        while (i < expanded.length && /\d/.test(expanded[i])) {
-          numStr += expanded[i];
-          i++;
-        }
-        const subMult = numStr ? parseInt(numStr, 10) : 1;
-        const popped = stack.pop();
-        if (!popped || stack.length === 0) return false;
-        const top = stack[stack.length - 1].counts;
-        for (const [el, cnt] of Object.entries(popped.counts)) {
-          top[el] = (top[el] || 0) + cnt * subMult;
-        }
-      } else if (/[A-Z]/.test(ch)) {
-        let el = ch;
-        i++;
-        while (i < expanded.length && /[a-z]/.test(expanded[i])) {
-          el += expanded[i];
-          i++;
-        }
-        if (!ATOMIC_WEIGHTS[el]) return false;
-        let numStr = "";
-        while (i < expanded.length && /\d/.test(expanded[i])) {
-          numStr += expanded[i];
-          i++;
-        }
-        const count = numStr ? parseInt(numStr, 10) : 1;
-        const top = stack[stack.length - 1].counts;
-        top[el] = (top[el] || 0) + count;
-      } else if (/\s/.test(ch)) {
-        i++;
-      } else {
-        return false;
-      }
-    }
-
-    if (stack.length !== 1) return false;
-    for (const [el, cnt] of Object.entries(stack[0].counts)) {
-      totalCounts[el] = (totalCounts[el] || 0) + cnt * multiplier;
-    }
-    return true;
+  const expanded = expandChemicalAbbreviations(rawFormula.trim());
+  const parsed = parseFormula(expanded);
+  if (!parsed.ok || parsed.counts.size === 0) {
+    return { mw: 0, composition: [], valid: false };
   }
 
-  // Handle hydrate dot notation e.g. CuSO4.5H2O
-  const parts = cleaned.split(".");
-  for (const part of parts) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const match = trimmed.match(/^(\d+)(.*)$/);
-    const mult = match ? parseInt(match[1], 10) : 1;
-    const rest = match ? match[2] : trimmed;
-    if (!parseSegment(rest, mult)) {
-      return { mw: 0, composition: [], valid: false };
-    }
-  }
-
-  let totalMass = 0;
-  for (const [el, cnt] of Object.entries(totalCounts)) {
-    totalMass += ATOMIC_WEIGHTS[el].mass * cnt;
-  }
-
+  const totalMass = parsed.mw;
   if (totalMass <= 0) return { mw: 0, composition: [], valid: false };
 
-  const composition = Object.entries(totalCounts)
+  const composition = Array.from(parsed.counts.entries())
     .map(([element, count]) => {
-      const mass = ATOMIC_WEIGHTS[element].mass * count;
+      const mass = (atomicWeight(element) ?? 0) * count;
       return {
         element,
         count,
@@ -781,13 +694,14 @@ export function StoichiometryLab({ onSelectReactionText, onOpenStudio }: Stoichi
   >("balancer");
 
   // --- TAB 1: STOICHIOMETRY WORKBENCH STATE ---
-  const [baseScaleMmol, setBaseScaleMmol] = useState<number>(STOICH_PRESETS[0].baseScaleMmol);
-  const [solvent, setSolvent] = useState<string>(STOICH_PRESETS[0].solvent);
-  const [concentrationM, setConcentrationM] = useState<number>(STOICH_PRESETS[0].concentrationM);
-  const [tempC, setTempC] = useState<number>(STOICH_PRESETS[0].tempC);
-  const [timeH, setTimeH] = useState<number>(STOICH_PRESETS[0].timeH);
-  const [rows, setRows] = useState<StoichRow[]>(STOICH_PRESETS[0].rows);
-  const [product, setProduct] = useState(STOICH_PRESETS[0].product);
+  const initialPreset = STOICH_PRESETS[0]!;
+  const [baseScaleMmol, setBaseScaleMmol] = useState<number>(initialPreset.baseScaleMmol);
+  const [solvent, setSolvent] = useState<string>(initialPreset.solvent);
+  const [concentrationM, setConcentrationM] = useState<number>(initialPreset.concentrationM);
+  const [tempC, setTempC] = useState<number>(initialPreset.tempC);
+  const [timeH, setTimeH] = useState<number>(initialPreset.timeH);
+  const [rows, setRows] = useState<StoichRow[]>(initialPreset.rows);
+  const [product, setProduct] = useState(initialPreset.product);
   const [copiedProc, setCopiedProc] = useState(false);
 
   // --- TAB 2: MOLAR MASS & SOLUTIONS STATE ---
@@ -1835,7 +1749,7 @@ export function StoichiometryLab({ onSelectReactionText, onOpenStudio }: Stoichi
         <EquationBalancer
           isRtl={isRtl}
           onLoadIntoStoichiometry={(balanced) => {
-            if (!balanced.valid || balanced.reactants.length === 0) return;
+            if (!balanced.valid || !balanced.reactants[0]) return;
             const baseCoeff = balanced.reactants[0].balancedCoeff || 1;
             const newRows: StoichRow[] = balanced.reactants.map((sp, idx) => ({
               id: `bal-${idx}-${Date.now()}`,
@@ -1846,8 +1760,8 @@ export function StoichiometryLab({ onSelectReactionText, onOpenStudio }: Stoichi
               role: idx === 0 ? "limiting" : "reactant",
             }));
             setRows(newRows);
-            if (balanced.products.length > 0) {
-              const firstProd = balanced.products[0];
+            const firstProd = balanced.products[0];
+            if (firstProd) {
               const prodEquiv = firstProd.balancedCoeff / baseCoeff;
               const theoMg = baseScaleMmol * prodEquiv * firstProd.mw;
               setProduct({

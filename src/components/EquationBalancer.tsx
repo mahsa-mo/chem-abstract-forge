@@ -93,7 +93,7 @@ export function EquationBalancer({
   onLoadIntoStoichiometry,
   onSendToStudio,
 }: EquationBalancerProps) {
-  const [equationInput, setEquationInput] = useState<string>(PRESET_EQUATIONS[0].eq);
+  const [equationInput, setEquationInput] = useState<string>(PRESET_EQUATIONS[0]?.eq ?? "");
   const [copied, setCopied] = useState(false);
 
   const result = useMemo(() => balanceChemicalEquation(equationInput), [equationInput]);

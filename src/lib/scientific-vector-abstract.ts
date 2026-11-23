@@ -27,8 +27,8 @@ import { synthesizeUniversalSvg } from "./universal-generative-engine";
 
 interface LayoutMolecule {
   species: ChemicalSpecies;
-  graph?: ChemGraph;
-  svgSnippet?: string;
+  graph?: ChemGraph | undefined;
+  svgSnippet?: string | undefined;
   width: number;
   height: number;
 }
@@ -57,8 +57,180 @@ function formatChemicalFormulaSvg(formula: string): string {
   );
 }
 
+function hasRtlText(text: string): boolean {
+  return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(text);
+}
+
+function getFontFamily(text?: string): string {
+  if (text && hasRtlText(text)) {
+    return "Vazirmatn, Tahoma, 'Segoe UI', Arial, sans-serif";
+  }
+  return "Inter, 'Helvetica Neue', Arial, Helvetica, sans-serif";
+}
+
 /**
- * Renders an individual chemical molecule or nanomaterial card in pure ACS publication style
+ * Word-wraps text cleanly by approximate character budget up to maxLines
+ */
+function wrapTextLines(text: string, maxCharsPerLine: number, maxLines = 2): string[] {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+  if (clean.length <= maxCharsPerLine) return [clean];
+
+  const words = clean.split(" ");
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxCharsPerLine) {
+      current = candidate;
+    } else {
+      if (current) {
+        lines.push(current);
+        current = word;
+      } else {
+        // Single long token (e.g. IUPAC name)
+        lines.push(word.slice(0, maxCharsPerLine));
+        current = word.slice(maxCharsPerLine);
+      }
+      if (lines.length === maxLines - 1) {
+        break;
+      }
+    }
+  }
+
+  // Handle remaining words for the final allowed line
+  const usedChars = lines.join(" ").length;
+  const remainder = clean.slice(usedChars).trim();
+  if (remainder && lines.length < maxLines) {
+    if (remainder.length > maxCharsPerLine) {
+      lines.push(remainder.slice(0, Math.max(4, maxCharsPerLine - 1)).trim() + "…");
+    } else {
+      lines.push(remainder);
+    }
+  } else if (current && lines.length < maxLines) {
+    lines.push(current);
+  }
+
+  return lines.slice(0, maxLines);
+}
+
+interface ResolvedPalette {
+  primary: string;
+  accent: string;
+  secondary: string;
+  product: string;
+  danger: string;
+  surfaceTint: string;
+}
+
+function getColorPalette(colorScheme: ColorScheme, standard: JournalStandard): ResolvedPalette {
+  const c = colorScheme.colors;
+  if (colorScheme.id === "colorblind-safe") {
+    return {
+      primary: c[0] || "#0072B2",
+      accent: c[1] || "#D55E00",
+      secondary: c[3] || "#E69F00",
+      product: c[2] || "#009E73",
+      danger: "#D55E00",
+      surfaceTint: "#f8fafc",
+    };
+  }
+  if (colorScheme.id === "high-contrast") {
+    return {
+      primary: "#0F172A",
+      accent: c[2] || "#2563EB",
+      secondary: "#475569",
+      product: "#0F172A",
+      danger: "#1E293B",
+      surfaceTint: "#f8fafc",
+    };
+  }
+  if (colorScheme.id === "nature-editorial") {
+    return {
+      primary: c[3] || "#0369A1",
+      accent: c[2] || "#B45309",
+      secondary: c[1] || "#BE123C",
+      product: c[0] || "#0F766E",
+      danger: c[1] || "#BE123C",
+      surfaceTint: "#f8fafc",
+    };
+  }
+  return {
+    primary: c[1] || standard.color || "#2563EB",
+    accent: "#4F46E5",
+    secondary: c[2] || "#0891B2",
+    product: c[3] || "#059669",
+    danger: "#DC2626",
+    surfaceTint: "#f8fafc",
+  };
+}
+
+/**
+ * Scales and centers a ChemGraph strictly within (targetW x targetH) with safe padding
+ * so atoms and labels never overflow card boundaries or collide with arrows/badges.
+ */
+function renderFittedChemGraph(
+  graph: ChemGraph,
+  targetW: number,
+  targetH: number,
+  padX = 24,
+  padY = 18,
+): string {
+  if (!graph || graph.atoms.length === 0) return "";
+
+  const bondCountById = new Map<string, number>();
+  for (const b of graph.bonds) {
+    bondCountById.set(b.from, (bondCountById.get(b.from) || 0) + 1);
+    bondCountById.set(b.to, (bondCountById.get(b.to) || 0) + 1);
+  }
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  for (const a of graph.atoms) {
+    const deg = bondCountById.get(a.id) || 0;
+    const isLabeled = !(a.element === "C" && deg > 0);
+    const labelLen = (a.label || a.element || "C").length;
+    const halfW = isLabeled ? Math.max(15, labelLen * 6.5 + 8) : 10;
+    const halfH = isLabeled ? 14 : 10;
+
+    minX = Math.min(minX, a.x - halfW);
+    maxX = Math.max(maxX, a.x + halfW);
+    minY = Math.min(minY, a.y - halfH);
+    maxY = Math.max(maxY, a.y + halfH);
+  }
+
+  const bboxW = Math.max(36, maxX - minX);
+  const bboxH = Math.max(36, maxY - minY);
+  const availW = Math.max(40, targetW - padX * 2);
+  const availH = Math.max(40, targetH - padY * 2);
+
+  // Never upscale tiny molecules absurdly large; shrink large ones cleanly
+  const scale = Math.min(availW / bboxW, availH / bboxH, 1.1);
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+
+  const rawSvg = exportGraphToSvg(graph, {
+    width: targetW,
+    height: targetH,
+    transparent: true,
+  });
+  const inner = rawSvg.replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
+
+  return `
+    <svg x="0" y="0" width="${targetW}" height="${targetH}" viewBox="0 0 ${targetW} ${targetH}" overflow="hidden">
+      <g transform="translate(${(targetW / 2).toFixed(1)}, ${(targetH / 2).toFixed(1)}) scale(${scale.toFixed(4)}) translate(${(-cx).toFixed(1)}, ${(-cy).toFixed(1)})">
+        ${inner}
+      </g>
+    </svg>
+  `;
+}
+
+/**
+ * Renders an individual chemical molecule or nanomaterial card in crisp ACS/Nature publication style
  */
 function renderMoleculeCard(
   mol: LayoutMolecule,
@@ -67,34 +239,52 @@ function renderMoleculeCard(
   width: number,
   height: number,
   roleColor: string,
+  roleLabel: string,
 ): string {
-  const name = escapeXml(mol.species.name || "Compound");
-  const nameFa = mol.species.nameFa ? escapeXml(mol.species.nameFa) : "";
+  const rawName = mol.species.name || "Compound";
+  const nameFont = getFontFamily(rawName);
+  const maxNameChars = Math.max(18, Math.floor((width - 28) / 7.1));
+  const nameLines = wrapTextLines(rawName, maxNameChars, 2);
+  const nameFontSize = nameLines.length > 1 || rawName.length > 26 ? 12.5 : 14;
+
+  const showFa =
+    mol.species.nameFa && mol.species.nameFa.trim().toLowerCase() !== rawName.trim().toLowerCase();
+  const nameFa = showFa ? escapeXml(mol.species.nameFa) : "";
+
   const formulaRaw = mol.species.formula || "";
   const formulaSvg = formatChemicalFormulaSvg(formulaRaw);
   const mw = mol.species.mw ? `${mol.species.mw.toFixed(1)} g/mol` : "";
-  const equiv = mol.species.equiv ? `${mol.species.equiv} equiv` : "";
-  const yieldText = mol.species.yieldPercent ? `${mol.species.yieldPercent}% Yield` : "";
 
-  // Render 2D Skeletal Structure if available
+  // Top-right badge text: yield / ee / equiv
+  let metricBadge = "";
+  let metricBg = "#f1f5f9";
+  let metricFg = "#475569";
+  if (mol.species.yieldPercent) {
+    metricBadge = mol.species.eePercent
+      ? `${mol.species.yieldPercent}% • ${mol.species.eePercent}% ee`
+      : `${mol.species.yieldPercent}% Yield`;
+    metricBg = "#ecfdf5";
+    metricFg = "#047857";
+  } else if (mol.species.equiv) {
+    metricBadge = `${mol.species.equiv} equiv`;
+    metricBg = "#eff6ff";
+    metricFg = "#1d4ed8";
+  }
+
+  const vpX = 12;
+  const vpY = 40;
+  const vpW = width - 24;
+  const footerH = showFa ? 88 : 74;
+  const vpH = Math.max(120, height - vpY - footerH - 8);
+
   let structureContent = "";
-  const viewportH = height - 96;
-
   if (mol.graph && mol.graph.atoms.length > 0) {
-    const structSvg = exportGraphToSvg(mol.graph, {
-      width: width - 28,
-      height: viewportH,
-      transparent: true,
-    });
-    // Strip outer svg tag to cleanly embed inside <g>
-    const inner = structSvg.replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
-    structureContent = `<g transform="translate(14, 14)">${inner}</g>`;
+    structureContent = `<g transform="translate(${vpX}, ${vpY})">${renderFittedChemGraph(mol.graph, vpW, vpH, 20, 16)}</g>`;
   } else {
-    // High-precision Inorganic / Nanomaterial / Biomolecule Lattice Glyph
-    const cx = width / 2;
-    const cy = viewportH / 2 + 10;
-    const r = 38;
-    // Calculate regular hexagon vertices
+    // Sleek Nanomaterial / Complex / Inorganic Crystal Emblem
+    const cx = vpX + vpW / 2;
+    const cy = vpY + vpH / 2;
+    const r = Math.min(46, vpH * 0.24);
     const hexPoints = Array.from({ length: 6 }, (_, i) => {
       const a = (i * Math.PI) / 3 - Math.PI / 6;
       return `${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`;
@@ -102,32 +292,56 @@ function renderMoleculeCard(
 
     structureContent = `
       <g>
-        <!-- Subtle Academic Lattice Connectors -->
-        <line x1="${cx - 46}" y1="${cy}" x2="${cx + 46}" y2="${cy}" stroke="${roleColor}" stroke-width="1" stroke-opacity="0.25" stroke-dasharray="3 2" />
-        <line x1="${cx}" y1="${cy - 46}" x2="${cx}" y2="${cy + 46}" stroke="${roleColor}" stroke-width="1" stroke-opacity="0.25" stroke-dasharray="3 2" />
-        
-        <!-- Hexagonal Unit Cell Badge -->
-        <polygon points="${hexPoints}" fill="#ffffff" stroke="${roleColor}" stroke-width="1.8" />
-        <polygon points="${hexPoints}" fill="${roleColor}" fill-opacity="0.05" />
-
-        <!-- Bold Chemical Formula -->
-        <text x="${cx}" y="${cy + 5}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="800" fill="${roleColor}">${formulaSvg || "Species"}</text>
+        <circle cx="${cx}" cy="${cy}" r="${r + 14}" fill="${roleColor}" fill-opacity="0.04" stroke="${roleColor}" stroke-opacity="0.18" stroke-width="1" stroke-dasharray="4 3" />
+        <polygon points="${hexPoints}" fill="#ffffff" stroke="${roleColor}" stroke-width="2" />
+        <polygon points="${hexPoints}" fill="${roleColor}" fill-opacity="0.07" />
+        <text x="${cx}" y="${cy + 5}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="13.5" font-weight="800" fill="${roleColor}">${formulaSvg || "Species"}</text>
       </g>
     `;
   }
 
+  const footerTop = height - footerH;
+  const nameStartY = nameLines.length > 1 ? 18 : 22;
+  const renderedNameLines = nameLines
+    .map(
+      (line, idx) =>
+        `<text x="${width / 2}" y="${nameStartY + idx * 15}" text-anchor="middle" font-family="${nameFont}" font-size="${nameFontSize}" font-weight="700" fill="#0f172a">${escapeXml(line)}</text>`,
+    )
+    .join("");
+
+  const metaY = showFa ? footerH - 12 : footerH - 14;
+  const faY = nameLines.length > 1 ? 49 : 41;
+  const metaParts = [formulaSvg, mw].filter(Boolean).join("  •  ");
+  const badgeW = metricBadge ? Math.min(126, metricBadge.length * 6.5 + 16) : 0;
+
   return `
-    <g transform="translate(${x}, ${y})">
-      <!-- Chemical Structure Viewport (clean, borderless, seamless) -->
+    <g transform="translate(${x}, ${y})" filter="url(#cardElevation)">
+      <rect width="${width}" height="${height}" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.2" />
+      <rect x="0" y="0" width="${width}" height="4" rx="2" fill="${roleColor}" />
+
+      <!-- Role & Metric Header Chips -->
+      <g transform="translate(12, 12)">
+        <rect width="74" height="20" rx="5" fill="${roleColor}" fill-opacity="0.1" />
+        <text x="37" y="13.5" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="700" fill="${roleColor}">${escapeXml(roleLabel)}</text>
+      </g>
+      ${
+        metricBadge
+          ? `<g transform="translate(${width - badgeW - 12}, 12)">
+              <rect width="${badgeW}" height="20" rx="5" fill="${metricBg}" />
+              <text x="${badgeW / 2}" y="13.5" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="10" font-weight="700" fill="${metricFg}">${escapeXml(metricBadge)}</text>
+            </g>`
+          : ""
+      }
+
+      <!-- 2D Chemical Structure Viewport -->
       ${structureContent}
 
-      <!-- Bottom Chemical Nomenclature & Details Bar (unboxed) -->
-      <g transform="translate(14, ${height - 74})">
-        <text x="${(width - 28) / 2}" y="20" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700" fill="#0f172a">${name}</text>
-        ${nameFa ? `<text x="${(width - 28) / 2}" y="38" text-anchor="middle" font-family="Arial, Tahoma, sans-serif" font-size="11" font-weight="500" fill="#64748b">${nameFa}</text>` : ""}
-        <text x="${(width - 28) / 2}" y="${nameFa ? 55 : 42}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="600" fill="${roleColor}">
-          ${formulaSvg} ${mw ? `  •  ${mw}` : ""} ${equiv ? `  •  ${equiv}` : ""} ${yieldText ? `  •  ${yieldText}` : ""}
-        </text>
+      <!-- Nomenclature & Formula Footer -->
+      <g transform="translate(0, ${footerTop})">
+        <line x1="14" y1="0" x2="${width - 14}" y2="0" stroke="#f1f5f9" stroke-width="1.2" />
+        ${renderedNameLines}
+        ${nameFa ? `<text x="${width / 2}" y="${faY}" text-anchor="middle" font-family="Vazirmatn, Tahoma, Arial, sans-serif" font-size="10.5" font-weight="600" fill="#64748b">${nameFa}</text>` : ""}
+        <text x="${width / 2}" y="${metaY}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="11" font-weight="700" fill="${roleColor}">${metaParts}</text>
       </g>
     </g>
   `;
@@ -529,7 +743,7 @@ function renderCoxInhibitionVectorAbstract(
     audit.title.toLowerCase().includes("cyclooxygenase");
 
   // Dynamic Primary Drug / Inhibitor
-  const drug =
+  const drug: Partial<ChemicalSpecies> & { name: string } =
     audit.reactants[0] ||
     (isAspirinCox
       ? {
@@ -552,13 +766,12 @@ function renderCoxInhibitionVectorAbstract(
   const drugMw = drug.mw ? `${drug.mw.toFixed(2)} g/mol` : "220.00 g/mol";
   const drugSmiles = drug.smiles || "";
 
-  // Pre-generate 2D ChemDraw skeletal structures for primary drug
+  // Pre-generate fitted 2D ChemDraw skeletal structures (leaving top 36px for callout badge)
   let drugSvg = "";
   if (drugSmiles) {
     try {
       const drugGraph = smilesToGraph(drugSmiles, 140, 95);
-      const raw = exportGraphToSvg(drugGraph, { width: 280, height: 160, transparent: true });
-      drugSvg = raw.replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
+      drugSvg = renderFittedChemGraph(drugGraph, 280, 118, 22, 10);
     } catch {
       drugSvg = "";
     }
@@ -604,8 +817,7 @@ function renderCoxInhibitionVectorAbstract(
   if (selSmiles) {
     try {
       const selGraph = smilesToGraph(selSmiles, 140, 95);
-      const raw = exportGraphToSvg(selGraph, { width: 280, height: 160, transparent: true });
-      selSvg = raw.replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
+      selSvg = renderFittedChemGraph(selGraph, 280, 118, 22, 10);
     } catch {
       selSvg = "";
     }
@@ -713,12 +925,12 @@ function renderCoxInhibitionVectorAbstract(
         <!-- 2D Skeletal Structure Viewport -->
         <g transform="translate(18, 104)">
           <rect width="280" height="156" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" />
-          <g transform="translate(0, 0)">${drugSvg}</g>
+          <g transform="translate(0, 36)">${drugSvg}</g>
           <!-- Active Functional Group Callout -->
-          <g transform="translate(140, 14)">
-            <rect width="128" height="22" rx="4" fill="#fef2f2" stroke="#f87171" stroke-width="1.2" />
+          <g transform="translate(136, 8)">
+            <rect width="136" height="22" rx="4" fill="#fef2f2" stroke="#f87171" stroke-width="1.2" />
             <circle cx="12" cy="11" r="3.5" fill="#e11d48" />
-            <text x="70" y="15" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#b91c1c">${calloutLabel}</text>
+            <text x="74" y="15" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#b91c1c">${calloutLabel}</text>
           </g>
         </g>
 
@@ -861,12 +1073,12 @@ function renderCoxInhibitionVectorAbstract(
         <!-- 2D Skeletal Structure Viewport -->
         <g transform="translate(18, 104)">
           <rect width="280" height="156" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" />
-          <g transform="translate(0, 0)">${selSvg}</g>
+          <g transform="translate(0, 36)">${selSvg}</g>
           <!-- Selective Pharmacophore Callout Badge -->
-          <g transform="translate(130, 14)">
-            <rect width="138" height="22" rx="4" fill="#ecfdf5" stroke="#34d399" stroke-width="1.2" />
+          <g transform="translate(126, 8)">
+            <rect width="146" height="22" rx="4" fill="#ecfdf5" stroke="#34d399" stroke-width="1.2" />
             <circle cx="12" cy="11" r="3.5" fill="#059669" />
-            <text x="75" y="15" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#065f46">${escapeXml(isAspirinCox ? "Bulky -SO2NH2 Pocket" : selectiveAgent.name ? "Target Selective Agent" : "Target Bound State")}</text>
+            <text x="79" y="15" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#065f46">${escapeXml(isAspirinCox ? "Bulky -SO2NH2 Pocket" : selectiveAgent.name ? "Target Selective Agent" : "Target Bound State")}</text>
           </g>
         </g>
 
@@ -877,7 +1089,7 @@ function renderCoxInhibitionVectorAbstract(
 
           <g transform="translate(12, 36)">
             <circle cx="4" cy="4" r="2.5" fill="#0d9488" />
-            <text x="14" y="8" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="600" fill="#334155">${escapeXml(isAspirinCox ? "COX-2 active site features Val523 (vs. Ile523 in COX-1)" : selectiveAgent.selectivityRationale || "High target-specific steric fit")}</text>
+            <text x="14" y="8" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="600" fill="#334155">${escapeXml(isAspirinCox ? "COX-2 active site features Val523 (vs. Ile523 in COX-1)" : ("selectivityRationale" in selectiveAgent ? selectiveAgent.selectivityRationale : undefined) || "High target-specific steric fit")}</text>
 
             <circle cx="4" cy="22" r="2.5" fill="#0d9488" />
             <text x="14" y="26" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="500" fill="#334155">${escapeXml(isAspirinCox ? "Smaller Valine residue opens an accessible side pocket" : track2.normalFunction.slice(0, 55))}</text>
@@ -914,7 +1126,7 @@ function renderCoxInhibitionVectorAbstract(
             Target: <tspan fill="#4f46e5">${escapeXml(isAspirinCox ? "COX-1 (PTGS1) & COX-2 (PTGS2) [EC 1.14.99.1]" : (track1.name || audit.title).slice(0, 45))}</tspan>
           </text>
           <text x="360" y="0" font-family="Arial, Helvetica, sans-serif" font-size="11.5" font-weight="700" fill="#0f172a">
-            Mechanism: <tspan fill="#e11d48">${escapeXml(isAspirinCox ? "Covalent Ser530 Transacetylation vs. Val523 Pocket Selectivity" : (audit.aiCascade?.summary || audit.summary).slice(0, 55))}</tspan>
+            Mechanism: <tspan fill="#e11d48">${escapeXml(isAspirinCox ? "Covalent Ser530 Transacetylation vs. Val523 Pocket Selectivity" : (audit.aiCascade?.summary || audit.summary || "").slice(0, 55))}</tspan>
           </text>
           <text x="800" y="0" font-family="Arial, Helvetica, sans-serif" font-size="11.5" font-weight="700" fill="#0f172a">
             Profile: <tspan fill="#059669">${escapeXml(isAspirinCox ? "Gastric Cytoprotection vs. Anti-Inflammatory Efficacy" : (track2.clinicalOutcome || "Target Efficacy & Selectivity").slice(0, 48))}</tspan>
@@ -1326,31 +1538,47 @@ export interface PedagogicalDetectionResult {
   reactionType: "clemmensen" | "diels-alder" | "fischer" | "wittig" | "general";
 }
 
+function hasWholeToken(text: string, words: string[]): boolean {
+  const lower = text.toLowerCase();
+  return words.some((w) => {
+    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (/^[a-z0-9\-\s]+$/i.test(w)) {
+      return new RegExp(`(?:^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`, "i").test(lower);
+    }
+    return new RegExp(`(?:^|[\\s،.؛:!?«»()\\[\\]])${escaped}(?=$|[\\s،.؛:!?«»()\\[\\]])`).test(
+      lower,
+    );
+  });
+}
+
 export function detectPedagogicalIntent(text: string): PedagogicalDetectionResult {
   const lower = text.toLowerCase();
-  const hasChemist =
-    lower.includes("شیمیست") ||
-    lower.includes("chemist") ||
-    lower.includes("دانشمند") ||
-    lower.includes("scientist") ||
-    lower.includes("استاد") ||
-    lower.includes("professor") ||
-    lower.includes("معلم") ||
-    lower.includes("teacher") ||
-    lower.includes("توضیح") ||
-    lower.includes("explain") ||
-    lower.includes("تدریس") ||
-    lower.includes("آموزش") ||
-    lower.includes("teaching");
+  const hasInstructor = hasWholeToken(lower, [
+    "شیمیست",
+    "chemist",
+    "دانشمند",
+    "scientist",
+    "استاد",
+    "professor",
+    "معلم",
+    "teacher",
+    "مدرس",
+  ]);
+  const hasTeachingAction = hasWholeToken(lower, [
+    "توضیح",
+    "تدریس",
+    "آموزش",
+    "explain",
+    "explaining",
+    "teach",
+    "teaching",
+    "chalkboard",
+    "blackboard",
+    "تخته",
+  ]);
 
-  const hasCat =
-    lower.includes("گربه") ||
-    lower.includes("پیشی") ||
-    lower.includes("cat") ||
-    lower.includes("feline") ||
-    lower.includes("kitten");
-
-  const hasDonkey = lower.includes("خر") || lower.includes("donkey") || lower.includes("قاطر");
+  const hasCat = hasWholeToken(lower, ["گربه", "پیشی", "cat", "feline", "kitten"]);
+  const hasDonkey = hasWholeToken(lower, ["خر", "donkey", "قاطر", "mule"]);
 
   let reactionType: "clemmensen" | "diels-alder" | "fischer" | "wittig" | "general" = "general";
   if (lower.includes("کلمنسن") || lower.includes("clemmensen")) {
@@ -1369,7 +1597,10 @@ export function detectPedagogicalIntent(text: string): PedagogicalDetectionResul
     reactionType = "wittig";
   }
 
-  const isPedagogical = hasChemist || ((hasCat || hasDonkey) && reactionType !== "general");
+  const hasChemist = hasInstructor;
+  const isPedagogical =
+    (hasInstructor && (hasTeachingAction || hasCat || hasDonkey)) ||
+    ((hasCat || hasDonkey) && (hasTeachingAction || reactionType !== "general"));
 
   return { isPedagogical, hasChemist, hasCat, hasDonkey, reactionType };
 }
@@ -1382,7 +1613,7 @@ export function detectPedagogicalIntent(text: string): PedagogicalDetectionResul
 export function renderPedagogicalTeachingAbstract(
   audit: ParsedReactionAudit,
   standard: JournalStandard,
-  colorScheme: ColorSchemeDefinition,
+  colorScheme: ColorScheme,
   pedagogical: PedagogicalDetectionResult,
 ): string {
   const isClemmensen = pedagogical.reactionType === "clemmensen";
@@ -1972,21 +2203,22 @@ export async function buildScientificVectorSvgDetailed(
   }
 
   // 2. Bio-Environmental Transport / Fauna + Flora in Nature / Meadow + Gas Plume + Polymer Matrix
-  const hasMeadowOrField =
-    text.includes("چمن") ||
-    text.includes("مرتع") ||
-    text.includes("مزرعه") ||
-    text.toLowerCase().includes("meadow") ||
-    text.toLowerCase().includes("grass");
+  const lowerText = text.toLowerCase();
+  const hasMeadowOrField = hasWholeToken(lowerText, [
+    "چمن",
+    "چمنزار",
+    "مرتع",
+    "مزرعه",
+    "meadow",
+    "grass",
+    "pasture",
+  ]);
 
-  const hasMethaneOrGas =
-    text.includes("متان") || text.toLowerCase().includes("methane") || text.includes("گاز");
+  const hasMethaneOrGas = hasWholeToken(lowerText, ["متان", "methane", "گاز", "gas"]);
 
   const hasPolymerOrMatrix =
-    text.includes("پلی") ||
-    text.toLowerCase().includes("poly") ||
-    text.includes("ماتریس") ||
-    text.includes("matrix");
+    hasWholeToken(lowerText, ["ماتریس", "matrix", "polyethylene", "پلی‌اتیلن", "پلی اتیلن"]) ||
+    lowerText.includes("polymer");
 
   const isBioEnvironmentalTransport =
     (hasMeadowOrField && hasMethaneOrGas) ||
@@ -2005,13 +2237,15 @@ export async function buildScientificVectorSvgDetailed(
 
   // 3. Dual-Track Pathway / Pharmacological Divergent Isozyme Renderer
   const hasDivergentTracks = !!audit.aiCascade?.divergentTracks;
+  const lowerTitle = (audit.title || "").toLowerCase();
   const isCoxIsozymeSpecific =
-    audit.title.toLowerCase().includes("cyclooxygenase") ||
-    audit.title.toLowerCase().includes("cox-1") ||
-    audit.title.toLowerCase().includes("cox-2") ||
-    (audit.title.toLowerCase().includes("aspirin") &&
-      (audit.summary?.toLowerCase().includes("cox") ||
-        audit.summary?.toLowerCase().includes("prostaglandin")));
+    lowerText.includes("cyclooxygenase") ||
+    (hasWholeToken(lowerText, ["cox-1"]) && hasWholeToken(lowerText, ["cox-2"])) ||
+    lowerTitle.includes("cyclooxygenase") ||
+    lowerTitle.includes("cox-1") ||
+    lowerTitle.includes("cox-2") ||
+    (lowerText.includes("aspirin") &&
+      (lowerText.includes("prostaglandin") || lowerText.includes("cox")));
 
   if (hasDivergentTracks || isCoxIsozymeSpecific) {
     return {
@@ -2022,9 +2256,9 @@ export async function buildScientificVectorSvgDetailed(
 
   // 4. If this reaction is Triglyceride formation, use the dedicated textbook-grade biochemical renderer
   if (
-    audit.title.toLowerCase().includes("triglyceride") ||
-    audit.title.toLowerCase().includes("triester") ||
-    audit.title.toLowerCase().includes("triacylglycerol")
+    lowerTitle.includes("triglyceride") ||
+    lowerTitle.includes("triester") ||
+    lowerTitle.includes("triacylglycerol")
   ) {
     return {
       svg: renderTriglycerideVectorAbstract(audit, standard, colorScheme),
@@ -2045,9 +2279,10 @@ export async function buildScientificVectorSvgDetailed(
 
   const width = 1280;
   const height = 720;
+  const palette = getColorPalette(colorScheme, standard);
 
-  // Reactants and Products layout
-  const reactantsList: LayoutMolecule[] = (
+  // Reactants and Products preparation
+  const reactantSpecies: ChemicalSpecies[] =
     audit.reactants.length > 0
       ? audit.reactants
       : [
@@ -2055,90 +2290,114 @@ export async function buildScientificVectorSvgDetailed(
             id: "r1",
             name: audit.titleFa || audit.title || "Input Chemical Entity",
             role: "reactant",
-            formula: "Substance Flow",
+            formula: "Substrate",
             mw: 120,
           },
-        ]
-  )
-    .slice(0, 3)
-    .map((sp) => {
-      let graph: ChemGraph | undefined;
-      if (sp.smiles) {
-        try {
-          graph = smilesToGraph(sp.smiles, 120, 100);
-        } catch {
-          /* fallback */
-        }
-      }
-      return {
-        species: sp,
-        graph,
-        width: 240,
-        height: 420,
-      };
-    });
+        ];
 
-  const productsList: LayoutMolecule[] = (
+  const reactantsList: LayoutMolecule[] = reactantSpecies.slice(0, 3).map((sp) => {
+    let graph: ChemGraph | undefined;
+    if (sp.smiles) {
+      try {
+        graph = smilesToGraph(sp.smiles, 120, 100);
+      } catch {
+        /* fallback */
+      }
+    }
+    return {
+      species: sp,
+      graph,
+      width: 240,
+      height: 420,
+    };
+  });
+
+  const productSpecies: ChemicalSpecies[] =
     audit.products.length > 0
       ? audit.products
       : [
           {
             id: "p1",
-            name: "Final Product / Transformed State",
+            name: "Target Product",
             role: "product",
-            formula: "Target System",
+            formula: "Target Product",
             mw: 160,
-            yieldPercent: 92,
+            yieldPercent: 90,
           },
-        ]
-  )
-    .slice(0, 2)
-    .map((sp) => {
-      let graph: ChemGraph | undefined;
-      if (sp.smiles) {
-        try {
-          graph = smilesToGraph(sp.smiles, 130, 100);
-        } catch {
-          /* fallback */
-        }
+        ];
+
+  const productsList: LayoutMolecule[] = productSpecies.slice(0, 2).map((sp) => {
+    let graph: ChemGraph | undefined;
+    if (sp.smiles) {
+      try {
+        graph = smilesToGraph(sp.smiles, 130, 100);
+      } catch {
+        /* fallback */
       }
-      return {
-        species: sp,
-        graph,
-        width: 270,
-        height: 420,
-      };
-    });
+    }
+    return {
+      species: sp,
+      graph,
+      width: 270,
+      height: 420,
+    };
+  });
 
-  // Calculate Symmetrical Layout Coordinates
-  const cardTopY = 136;
-  const cardH = 420;
-  const reactionCenterY = cardTopY + cardH / 2; // 346
+  // Balanced symmetrical horizontal layout across 1208px inner canvas (x=36..1244)
+  const marginX = 36;
+  const innerW = width - marginX * 2; // 1208
+  const cardTopY = 134;
+  const cardH = 442;
+  const reactionCenterY = cardTopY + cardH / 2 - 8; // 347
 
-  // Total reactants width
-  const reactantCardW = reactantsList.length === 1 ? 280 : 230;
-  const plusW = 38;
+  const plusW = 34;
+  const arrowGap = 18;
+  const arrowW = 192;
+  const totalSlots = reactantsList.length + productsList.length;
+  const fixedGaps =
+    (reactantsList.length - 1) * plusW + (productsList.length - 1) * plusW + arrowW + arrowGap * 2;
+  const availCardsW = innerW - fixedGaps;
+
+  // Favor slightly wider product card when single product vs 2 reactants
+  const rawCardW = Math.floor(availCardsW / Math.max(1, totalSlots));
+  const reactantCardW = Math.min(
+    340,
+    Math.max(195, rawCardW - (productsList.length === 1 && reactantsList.length >= 2 ? 12 : 0)),
+  );
+  const prodCardW = Math.min(
+    370,
+    Math.max(
+      220,
+      Math.floor((availCardsW - reactantCardW * reactantsList.length) / productsList.length),
+    ),
+  );
+
   const reactantsTotalW = reactantsList.length * reactantCardW + (reactantsList.length - 1) * plusW;
-
-  const arrowW = 150;
-  const prodCardW = productsList.length === 1 ? 320 : 250;
   const prodsTotalW = productsList.length * prodCardW + (productsList.length - 1) * plusW;
-
-  const totalContentW = reactantsTotalW + arrowW + prodsTotalW + 64;
-  const startX = Math.max(36, (width - totalContentW) / 2);
+  const totalContentW = reactantsTotalW + arrowGap * 2 + arrowW + prodsTotalW;
+  const startX = Math.max(marginX, Math.round((width - totalContentW) / 2));
 
   // Render Reactants Column
   let reactantsSvg = "";
   let currX = startX;
   for (let i = 0; i < reactantsList.length; i++) {
     const mol = reactantsList[i]!;
-    reactantsSvg += renderMoleculeCard(mol, currX, cardTopY, reactantCardW, cardH, "#2563eb");
+    const roleLabel = reactantsList.length > 1 ? `Reactant ${i + 1}` : "Substrate";
+    reactantsSvg += renderMoleculeCard(
+      mol,
+      currX,
+      cardTopY,
+      reactantCardW,
+      cardH,
+      palette.primary,
+      roleLabel,
+    );
     currX += reactantCardW;
     if (i < reactantsList.length - 1) {
       reactantsSvg += `
         <g transform="translate(${currX + plusW / 2}, ${reactionCenterY})">
-          <circle r="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" />
-          <text y="5" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#64748b">+</text>
+          <circle r="13" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.4" />
+          <text y="5" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700" fill="#475569">+</text>
         </g>
       `;
       currX += plusW;
@@ -2146,38 +2405,94 @@ export async function buildScientificVectorSvgDetailed(
   }
 
   // Reaction Arrow Center
-  const arrowX = currX + 32;
-  currX = arrowX + arrowW + 32;
+  const arrowX = currX + arrowGap;
+  currX = arrowX + arrowW + arrowGap;
 
-  // Extract Conditions (strictly what user mentioned)
-  const catalystsStr =
-    audit.catalysts.map((c) => c.name).join(", ") ||
-    (audit.conditions.light ? `hν (${audit.conditions.light})` : "");
-  const solventTempStr =
-    [audit.conditions.solvent, audit.conditions.temperature, audit.conditions.time]
-      .filter(Boolean)
-      .join(", ") || "";
+  // Build Reaction Arrow Annotations (Catalysts, Reagents, Light, Solvent, Temp/Time)
+  const catalystLines = wrapTextLines(
+    audit.catalysts
+      .map((c) => (c.molPercent ? `${c.name} (${c.molPercent} mol%)` : c.name))
+      .join(", "),
+    28,
+    2,
+  );
+  const reagentStr = audit.reagents
+    .map((rg) => (rg.equiv ? `${rg.name} (${rg.equiv} equiv)` : rg.name))
+    .join(", ");
+  const reagentLines = reagentStr ? wrapTextLines(reagentStr, 28, 1) : [];
+
+  const condParts = [
+    audit.conditions.solvent,
+    audit.conditions.temperature,
+    audit.conditions.time,
+  ].filter(Boolean);
+  const condLines = wrapTextLines(condParts.join(" • "), 30, 2);
+  const lightStr = audit.conditions.light ? `hν (${audit.conditions.light})` : "";
 
   const apparatusList = detectMentionedApparatus(text);
   const appLabel =
     apparatusList.length > 0 ? `Setup: ${apparatusList.map((a) => a.en).join(", ")}` : "";
-  const badgeW = Math.min(260, appLabel.length * 7 + 24);
+  const badgeW = Math.min(184, appLabel.length * 6.5 + 20);
+
+  // Position above-arrow text cleanly upward from y = -16
+  let aboveOffset = -18;
+  const reagentSvg = reagentLines
+    .reverse()
+    .map((line) => {
+      const yPos = aboveOffset;
+      aboveOffset -= 16;
+      return `<text x="${arrowW / 2}" y="${yPos}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="11.5" font-weight="600" fill="#475569">${escapeXml(line)}</text>`;
+    })
+    .join("");
+
+  const catalystSvg = catalystLines
+    .reverse()
+    .map((line) => {
+      const yPos = aboveOffset;
+      aboveOffset -= 17;
+      return `<text x="${arrowW / 2}" y="${yPos}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12.5" font-weight="700" fill="${palette.accent}">${escapeXml(line)}</text>`;
+    })
+    .join("");
+
+  let belowOffset = 22;
+  const lightBadgeSvg = lightStr
+    ? (() => {
+        const lw = Math.min(182, lightStr.length * 6.8 + 18);
+        const yPos = belowOffset - 12;
+        belowOffset += 26;
+        return `<g transform="translate(${(arrowW - lw) / 2}, ${yPos})">
+          <rect width="${lw}" height="20" rx="5" fill="#fef3c7" stroke="#fcd34d" stroke-width="1" />
+          <text x="${lw / 2}" y="13.5" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#b45309">${escapeXml(lightStr)}</text>
+        </g>`;
+      })()
+    : "";
+
+  const condSvg = condLines
+    .map((line) => {
+      const yPos = belowOffset;
+      belowOffset += 16;
+      return `<text x="${arrowW / 2}" y="${yPos}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="11.5" font-weight="600" fill="#475569">${escapeXml(line)}</text>`;
+    })
+    .join("");
+
   const apparatusBadge =
     apparatusList.length > 0
-      ? `<g transform="translate(${arrowW / 2}, 50)">
-          <rect x="${-badgeW / 2}" y="-11" width="${badgeW}" height="22" rx="6" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.2" />
-          <text y="4" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#1e293b">${escapeXml(appLabel)}</text>
+      ? `<g transform="translate(${arrowW / 2}, ${belowOffset + 12})">
+          <rect x="${-badgeW / 2}" y="-11" width="${badgeW}" height="22" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.1" />
+          <text y="3.5" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#1e293b">${escapeXml(appLabel)}</text>
         </g>`
       : "";
 
   const arrowSvg = `
     <g transform="translate(${arrowX}, ${reactionCenterY})">
-      <text x="${arrowW / 2}" y="-22" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#0f172a">${escapeXml(catalystsStr)}</text>
+      ${catalystSvg}
+      ${reagentSvg}
 
-      <line x1="0" y1="0" x2="${arrowW - 14}" y2="0" stroke="#0f172a" stroke-width="3" stroke-linecap="round" />
-      <polygon points="${arrowW},0 ${arrowW - 14},-7 ${arrowW - 10},0 ${arrowW - 14},7" fill="#0f172a" />
+      <line x1="6" y1="0" x2="${arrowW - 18}" y2="0" stroke="#0f172a" stroke-width="2.8" stroke-linecap="round" />
+      <polygon points="${arrowW - 4},0 ${arrowW - 18},-6.5 ${arrowW - 14},0 ${arrowW - 18},6.5" fill="#0f172a" />
 
-      <text x="${arrowW / 2}" y="24" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="600" fill="#64748b">${escapeXml(solventTempStr)}</text>
+      ${lightBadgeSvg}
+      ${condSvg}
       ${apparatusBadge}
     </g>
   `;
@@ -2186,38 +2501,110 @@ export async function buildScientificVectorSvgDetailed(
   let productsSvg = "";
   for (let i = 0; i < productsList.length; i++) {
     const mol = productsList[i]!;
-    productsSvg += renderMoleculeCard(mol, currX, cardTopY, prodCardW, cardH, "#059669");
+    const roleColor = mol.species.role === "byproduct" ? palette.secondary : palette.product;
+    const roleLabel =
+      mol.species.role === "byproduct"
+        ? "Byproduct"
+        : productsList.length > 1
+          ? `Product ${i + 1}`
+          : "Isolated Product";
+    productsSvg += renderMoleculeCard(mol, currX, cardTopY, prodCardW, cardH, roleColor, roleLabel);
     currX += prodCardW;
     if (i < productsList.length - 1) {
       productsSvg += `
         <g transform="translate(${currX + plusW / 2}, ${reactionCenterY})">
-          <circle r="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" />
-          <text y="5" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#64748b">+</text>
+          <circle r="13" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.4" />
+          <text y="5" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700" fill="#475569">+</text>
         </g>
       `;
       currX += plusW;
     }
   }
 
-  // Clean Minimal Title Heading (No Artificial Badges or Metadata Stamps)
-  const titleText = escapeXml(audit.title || "Target Chemical Transformation");
-  const categoryText = escapeXml(audit.category || "Synthetic & Materials Chemistry");
+  // Clean Publication Title Header (wraps cleanly across <= 2 lines, RTL-aware)
+  const rawTitle = (audit.title || "Target Chemical Transformation")
+    .replace(/^[,،.;:\s]+/, "")
+    .trim();
+  const titleFont = getFontFamily(rawTitle);
+  const titleLines = wrapTextLines(rawTitle, 92, 2);
+  const titleSize = titleLines.length > 1 ? 18.5 : 21;
+  const renderedTitleLines = titleLines
+    .map(
+      (line, idx) =>
+        `<text x="0" y="${46 + idx * 23}" font-family="${titleFont}" font-size="${titleSize}" font-weight="800" fill="#0f172a">${escapeXml(line)}</text>`,
+    )
+    .join("");
+
+  const badgeLabel = escapeXml(standard.badge || "ACS TOC");
+  const badgePillW = Math.max(90, badgeLabel.length * 7.5 + 22);
+  const journalName = escapeXml(standard.fullName || "Publication Graphical Abstract");
+  const categoryText = escapeXml(audit.category || "Synthetic Chemistry");
 
   const headerSvg = `
-    <g transform="translate(36, 40)">
-      <text x="0" y="32" font-family="Inter, system-ui, Arial, sans-serif" font-size="22" font-weight="700" fill="#0f172a">${titleText}</text>
-      <text x="0" y="54" font-family="Inter, system-ui, Arial, sans-serif" font-size="13" font-weight="500" fill="#64748b">${categoryText}</text>
+    <g transform="translate(${marginX}, 24)">
+      <rect x="0" y="0" width="${badgePillW}" height="22" rx="5" fill="${palette.primary}" />
+      <text x="${badgePillW / 2}" y="14.5" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="10.5" font-weight="800" fill="#ffffff">${badgeLabel}</text>
+      <text x="${badgePillW + 12}" y="15" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="600" fill="#64748b">${journalName}</text>
+      <text x="${innerW}" y="15" text-anchor="end" font-family="Inter, Arial, sans-serif" font-size="11.5" font-weight="700" fill="${palette.primary}">${categoryText}</text>
+
+      ${renderedTitleLines}
+      <line x1="0" y1="96" x2="${innerW}" y2="96" stroke="#e2e8f0" stroke-width="1.2" />
+    </g>
+  `;
+
+  // Bottom Quantitative Chemistry Metrics Strip (Clean 4-column summary)
+  const mainProductYield =
+    productsList[0]?.species.yieldPercent || audit.conditions.yieldPercent || 90;
+  const mainProductEe = productsList[0]?.species.eePercent;
+  const balancedElementsCount = audit.atomAudit.filter((a) => a.balanced).length;
+  const stoichiometryLabel =
+    audit.atomAudit.length > 0 && balancedElementsCount === audit.atomAudit.length
+      ? "Mass & Atom Balanced"
+      : `${reactantsList.length} Reactant${reactantsList.length > 1 ? "s" : ""} → ${productsList.length} Product${productsList.length > 1 ? "s" : ""}`;
+
+  const footerStripSvg = `
+    <g transform="translate(${marginX}, 602)">
+      <rect width="${innerW}" height="82" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.2" />
+
+      <g transform="translate(28, 28)">
+        <text x="0" y="0" font-family="Inter, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#64748b">ATOM ECONOMY</text>
+        <text x="0" y="24" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="800" fill="${palette.primary}">${audit.atomEconomyPercent}%</text>
+      </g>
+      <line x1="250" y1="16" x2="250" y2="66" stroke="#e2e8f0" stroke-width="1.2" />
+
+      <g transform="translate(278, 28)">
+        <text x="0" y="0" font-family="Inter, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#64748b">${mainProductEe ? "YIELD & SELECTIVITY" : "REPORTED YIELD"}</text>
+        <text x="0" y="24" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="800" fill="${palette.product}">${mainProductYield}%${mainProductEe ? ` (${mainProductEe}% ee)` : ""}</text>
+      </g>
+      <line x1="560" y1="16" x2="560" y2="66" stroke="#e2e8f0" stroke-width="1.2" />
+
+      <g transform="translate(588, 28)">
+        <text x="0" y="0" font-family="Inter, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#64748b">REACTION CLASS</text>
+        <text x="0" y="22" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">${escapeXml(audit.category.slice(0, 34))}</text>
+      </g>
+      <line x1="900" y1="16" x2="900" y2="66" stroke="#e2e8f0" stroke-width="1.2" />
+
+      <g transform="translate(928, 28)">
+        <text x="0" y="0" font-family="Inter, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#64748b">SCHEME AUDIT</text>
+        <text x="0" y="22" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" fill="${palette.accent}">${escapeXml(stoichiometryLabel)}</text>
+      </g>
     </g>
   `;
 
   const finalSvg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
+      <defs>
+        <filter id="cardElevation" x="-4%" y="-4%" width="108%" height="110%" filterUnits="userSpaceOnUse">
+          <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.05" />
+        </filter>
+      </defs>
       <rect width="${width}" height="${height}" fill="#ffffff" />
 
       ${headerSvg}
       ${reactantsSvg}
       ${arrowSvg}
       ${productsSvg}
+      ${footerStripSvg}
     </svg>
   `.trim();
 

@@ -341,7 +341,13 @@ export function MechanismOverlayModal({
   ) {
     e.stopPropagation();
     setSelectedId(itemId);
-    const rect = e.currentTarget.ownerSVGElement?.getBoundingClientRect();
+    const svgEl =
+      e.currentTarget instanceof SVGSVGElement
+        ? e.currentTarget
+        : e.currentTarget instanceof SVGElement
+          ? e.currentTarget.ownerSVGElement
+          : null;
+    const rect = svgEl?.getBoundingClientRect();
     if (!rect) return;
 
     const scaleX = imageSize.width / rect.width;

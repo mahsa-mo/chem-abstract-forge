@@ -19,10 +19,11 @@ export type GenerationRow = {
 
 async function uploadImage(userId: string, dataUrl: string): Promise<string | null> {
   const blob = await (await fetch(dataUrl)).blob();
-  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`;
-  const { error } = await supabase.storage
-    .from("abstracts")
-    .upload(path, blob, { contentType: "image/png" });
+  const isSvg = blob.type.includes("svg") || dataUrl.startsWith("data:image/svg+xml");
+  const ext = isSvg ? "svg" : "png";
+  const contentType = isSvg ? "image/svg+xml" : blob.type || "image/png";
+  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from("abstracts").upload(path, blob, { contentType });
   return error ? null : path;
 }
 

@@ -1,8 +1,12 @@
+import { smilesToLayout } from "./chem-core/layout";
+
 export type BondType = "single" | "double" | "triple" | "wedge" | "dash" | "wavy";
 
 export interface ChemAtom {
   id: string;
   element: string;
+  /** Optional display text (e.g. "NH2", "O⁻"); `element` stays the plain symbol. */
+  label?: string;
   x: number;
   y: number;
   charge?: number;
@@ -145,7 +149,7 @@ export function computeGraphFormulaAndMw(graph: ChemGraph): {
     .forEach((k) => ordered.push(k));
   if (!counts["C"] && counts["H"]) ordered.push("H");
 
-  const formula = ordered.map((el) => `${el}${counts[el] > 1 ? counts[el] : ""}`).join("");
+  const formula = ordered.map((el) => `${el}${(counts[el] ?? 0) > 1 ? counts[el] : ""}`).join("");
 
   let mw = 0;
   for (const [el, cnt] of Object.entries(counts)) {
@@ -294,15 +298,16 @@ export function generateRingTemplate(
   kind: "benzene" | "cyclohexane" | "cyclopentane" | "pyridine" | "naphthalene" | "indole",
   cx: number,
   cy: number,
+  bondLen: number = BOND_LENGTH,
 ): ChemGraph {
-  const r = BOND_LENGTH;
+  const r = bondLen;
   const uid = () => Math.random().toString(36).slice(2, 9);
 
   if (kind === "naphthalene") {
     // Two fused 6-membered rings
-    const g1 = generateRingTemplate("benzene", cx - r * 0.866, cy);
-    const aRightTop = g1.atoms[0];
-    const aRightBot = g1.atoms[1];
+    const g1 = generateRingTemplate("benzene", cx - r * 0.866, cy, r);
+    const aRightTop = g1.atoms[0]!;
+    const aRightBot = g1.atoms[1]!;
     const dx = aRightBot.x - aRightTop.x;
     const dy = aRightBot.y - aRightTop.y;
     const baseAngle = Math.atan2(dy, dx);
@@ -321,11 +326,11 @@ export function generateRingTemplate(
     }
 
     const newBonds: ChemBond[] = [
-      { id: `b-${uid()}-1`, from: prevId, to: newAtoms[0].id, type: "single" },
-      { id: `b-${uid()}-2`, from: newAtoms[0].id, to: newAtoms[1].id, type: "double" },
-      { id: `b-${uid()}-3`, from: newAtoms[1].id, to: newAtoms[2].id, type: "single" },
-      { id: `b-${uid()}-4`, from: newAtoms[2].id, to: newAtoms[3].id, type: "double" },
-      { id: `b-${uid()}-5`, from: newAtoms[3].id, to: aRightTop.id, type: "single" },
+      { id: `b-${uid()}-1`, from: prevId, to: newAtoms[0]!.id, type: "single" },
+      { id: `b-${uid()}-2`, from: newAtoms[0]!.id, to: newAtoms[1]!.id, type: "double" },
+      { id: `b-${uid()}-3`, from: newAtoms[1]!.id, to: newAtoms[2]!.id, type: "single" },
+      { id: `b-${uid()}-4`, from: newAtoms[2]!.id, to: newAtoms[3]!.id, type: "double" },
+      { id: `b-${uid()}-5`, from: newAtoms[3]!.id, to: aRightTop.id, type: "single" },
     ];
 
     return {
@@ -336,9 +341,9 @@ export function generateRingTemplate(
 
   if (kind === "indole") {
     // Benzene fused to pyrrole
-    const g1 = generateRingTemplate("benzene", cx - r * 0.8, cy);
-    const topAtom = g1.atoms[0];
-    const botAtom = g1.atoms[1];
+    const g1 = generateRingTemplate("benzene", cx - r * 0.8, cy, r);
+    const topAtom = g1.atoms[0]!;
+    const botAtom = g1.atoms[1]!;
     const nAtom: ChemAtom = {
       id: `a-${uid()}-N`,
       element: "N",
@@ -388,8 +393,8 @@ export function generateRingTemplate(
     const isDouble = (kind === "benzene" || kind === "pyridine") && i % 2 === 0;
     bonds.push({
       id: `b-${uid()}-${i}`,
-      from: atoms[i].id,
-      to: atoms[next].id,
+      from: atoms[i]!.id,
+      to: atoms[next]!.id,
       type: isDouble ? "double" : "single",
     });
   }
@@ -452,8 +457,8 @@ export function fuseRingToBond(
     const isDouble = (kind === "benzene" || kind === "pyridine") && i % 2 === 1;
     newBonds.push({
       id: `b-${uid()}-${i}`,
-      from: chainIds[i],
-      to: chainIds[i + 1],
+      from: chainIds[i]!,
+      to: chainIds[i + 1]!,
       type: isDouble ? "double" : "single",
     });
   }
@@ -464,6 +469,12 @@ export function fuseRingToBond(
   };
 }
 
+function hashString(value: string): string {
+  let h = 5381;
+  for (let i = 0; i < value.length; i++) h = ((h << 5) + h + value.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
 // Curated preset 2D structures & general SMILES parser
 export function smilesToGraph(smilesInput: string, centerX = 380, centerY = 230): ChemGraph {
   const s = smilesInput.trim();
@@ -472,8 +483,8 @@ export function smilesToGraph(smilesInput: string, centerX = 380, centerY = 230)
   // Preset 1: Aspirin CC(=O)Oc1ccccc1C(=O)O
   if (s === "CC(=O)Oc1ccccc1C(=O)O" || s.toLowerCase() === "aspirin") {
     const ring = generateRingTemplate("benzene", centerX - 30, centerY);
-    const aTop = ring.atoms[0];
-    const aRight = ring.atoms[1];
+    const aTop = ring.atoms[0]!;
+    const aRight = ring.atoms[1]!;
 
     // Carboxylic acid on aTop
     const cAcid: ChemAtom = { id: `a-${uid()}-c1`, element: "C", x: aTop.x + 26, y: aTop.y - 45 };
@@ -509,8 +520,8 @@ export function smilesToGraph(smilesInput: string, centerX = 380, centerY = 230)
   // Preset 2: Paracetamol CC(=O)Nc1ccc(O)cc1
   if (s === "CC(=O)Nc1ccc(O)cc1" || s.toLowerCase() === "paracetamol") {
     const ring = generateRingTemplate("benzene", centerX, centerY);
-    const a1 = ring.atoms[1];
-    const a4 = ring.atoms[4];
+    const a1 = ring.atoms[1]!;
+    const a4 = ring.atoms[4]!;
 
     const oh: ChemAtom = { id: `a-${uid()}-oh`, element: "OH", x: a4.x - 52, y: a4.y };
     const nAmide: ChemAtom = { id: `a-${uid()}-n`, element: "N", x: a1.x + 52, y: a1.y };
@@ -543,16 +554,16 @@ export function smilesToGraph(smilesInput: string, centerX = 380, centerY = 230)
     const oMe: ChemAtom = {
       id: `a-${uid()}-ome`,
       element: "OMe",
-      x: r1.atoms[4].x - 52,
-      y: r1.atoms[4].y,
+      x: r1.atoms[4]!.x - 52,
+      y: r1.atoms[4]!.y,
     };
     return {
       atoms: [...r1.atoms, ...r2.atoms, oMe],
       bonds: [
         ...r1.bonds,
         ...r2.bonds,
-        { id: `b-${uid()}-cc`, from: r1.atoms[1].id, to: r2.atoms[4].id, type: "single" },
-        { id: `b-${uid()}-om`, from: r1.atoms[4].id, to: oMe.id, type: "single" },
+        { id: `b-${uid()}-cc`, from: r1.atoms[1]!.id, to: r2.atoms[4]!.id, type: "single" },
+        { id: `b-${uid()}-om`, from: r1.atoms[4]!.id, to: oMe.id, type: "single" },
       ],
     };
   }
@@ -586,9 +597,10 @@ export function smilesToGraph(smilesInput: string, centerX = 380, centerY = 230)
   }
 
   // Preset 5: Celecoxib (Selective COX-2 Inhibitor)
+  // Matches only the exact SMILES or the name. (It used to match any SMILES containing
+  // "S(N)(=O)=O", so unrelated sulfonamides rendered as Celecoxib.)
   if (
-    s.includes("S(N)(=O)=O") ||
-    s.toLowerCase().includes("celecoxib") ||
+    s.toLowerCase() === "celecoxib" ||
     s === "Cc1ccc(-c2cc(C(F)(F)F)nn2-c2ccc(S(N)(=O)=O)cc2)cc1"
   ) {
     // Central Pyrazole Ring
@@ -664,6 +676,10 @@ export function smilesToGraph(smilesInput: string, centerX = 380, centerY = 230)
     };
   }
 
+  // 2D coordinate layout via openchemlib (handles rings, fused systems, charges, stereo)
+  const layout = smilesToLayout(s, centerX, centerY, BOND_LENGTH, `${hashString(s)}-`);
+  if (layout) return layout;
+
   // General SMILES Parser (supports chains, branches, rings, double/triple bonds)
   const atoms: ChemAtom[] = [];
   const bonds: ChemBond[] = [];
@@ -677,7 +693,7 @@ export function smilesToGraph(smilesInput: string, centerX = 380, centerY = 230)
 
   let i = 0;
   while (i < s.length) {
-    const ch = s[i];
+    const ch = s.charAt(i);
     if (ch === "(") {
       if (currAtomId) {
         branchStack.push({ atomId: currAtomId, angle: currAngle });
@@ -844,7 +860,7 @@ export function exportGraphToSvg(
       const degree = graph.bonds.filter((b) => b.from === a.id || b.to === a.id).length;
       if (a.element === "C" && degree > 0) return "";
       const color = CPK_ATOM_COLORS[a.element] || "#0f172a";
-      const label = a.element === "C" ? "CH4" : a.element;
+      const label = a.label ?? (a.element === "C" ? "CH4" : a.element);
       const formattedLabel = label.replace(
         /([A-Za-z)\]])(\d+)/g,
         '$1<tspan font-size="75%" baseline-shift="sub">$2</tspan>',

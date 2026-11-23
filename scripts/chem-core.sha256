@@ -1,0 +1,12 @@
+949b423c02d10d264edfd58292f100a2a4b8fa39bfb599966753dbb43268fd54  src/lib/chem-core/balance.test.ts
+c01565096181aae645a88a6c5566b1e210eee186ab77724eb3ca843e3e0d1c5d  src/lib/chem-core/balance.ts
+2638deace34394cde48d8ebea9957c4030c4bc144ec40912606ebe9f254b880d  src/lib/chem-core/formula.test.ts
+bcb421aa59fe87d606284f1c173393fc4f11280d5ee5f4e0a512df262eebdc7d  src/lib/chem-core/formula.ts
+556f7c369bb3c697ba6013541de47353014bf09fc6d7d913da9448c1ab383829  src/lib/chem-core/index.ts
+caf16a5cc65da79e26447f30eb6a051f6124f4b615da9968cac1083a71f63664  src/lib/chem-core/layout.test.ts
+e179f7d55edf4e5dbb7954a3ee558fc5b275697141e3a8096011908cd7a8b7f8  src/lib/chem-core/layout.ts
+2060f2a06f2eb3a6b80bfe6be3a3501a7843d96aba6b257e7d4a1abac8d79633  src/lib/chem-core/molecule.test.ts
+d40ea16939d211527a4372a492d7fae8394936868e9d5b95ec1404689b9ff8cc  src/lib/chem-core/molecule.ts
+baf0c770dea303ef5b87bc832adbc1259a034386c31aea080e6a297048b8ad58  src/lib/chem-core/parse.ts
+b722d0b167d20f3fd3e47d6cbc647e5a6794fc03d09e61e800fb64262659afcf  src/lib/chem-core/periodic.ts
+0fd01d9d5e455b3fa670ba650d65d2741f06d8dcd6140293fb035138087f8722  src/lib/chem-core/render.ts

@@ -1,4 +1,5 @@
-import { parseChemicalFormula } from "@/components/StoichiometryLab";
+import { parseFormula } from "./chem-core/formula";
+import { solveCoefficients } from "./chem-core/balance";
 
 export interface ParsedSpecies {
   raw: string;
@@ -32,31 +33,53 @@ export interface BalancedEquationResult {
   matrixSteps_fa: string[];
 }
 
-function gcd(a: number, b: number): number {
-  let x = Math.abs(Math.round(a));
-  let y = Math.abs(Math.round(b));
-  while (y !== 0) {
-    const t = y;
-    y = x % y;
-    x = t;
-  }
-  return x || 1;
+export function expandChemicalAbbreviations(formula: string): string {
+  return formula
+    .replace(/Ph/g, "(C6H5)")
+    .replace(/Me/g, "(CH3)")
+    .replace(/Et/g, "(C2H5)")
+    .replace(/iPr/g, "(C3H7)")
+    .replace(/Pr/g, "(C3H7)")
+    .replace(/tBu/g, "(C4H9)")
+    .replace(/Bu/g, "(C4H9)")
+    .replace(/Ac/g, "(C2H3O)")
+    .replace(/Bn/g, "(C7H7)")
+    .replace(/Bz/g, "(C7H5O)")
+    .replace(/Tf/g, "(CF3SO2)")
+    .replace(/Ts/g, "(C7H7SO2)")
+    .replace(/Boc/g, "(C5H9O2)")
+    .replace(/dba/g, "(C17H14O)")
+    .replace(/ppy/g, "(C11H8N)");
 }
 
-function lcm(a: number, b: number): number {
-  if (a === 0 || b === 0) return 0;
-  return Math.abs(Math.round((a * b) / gcd(a, b)));
+interface ParsedTokenInternal extends Omit<ParsedSpecies, "balancedCoeff"> {
+  solverFormula: string;
+}
+
+// Extract charge suffix if present (^2+, ^-, Na+, Cl-, Fe²⁺) for display vs solver
+function extractChargeSuffix(s: string): { base: string; chargeSuffix: string } {
+  const caret = /\^(\d*)([+-])$/.exec(s);
+  if (caret && caret.index !== undefined) {
+    return { base: s.slice(0, caret.index).trim(), chargeSuffix: caret[0] };
+  }
+  const unicode = /[⁰¹²³⁴⁵⁶⁷⁸⁹]*[⁺⁻]$/.exec(s);
+  if (unicode && unicode.index !== undefined) {
+    return { base: s.slice(0, unicode.index).trim(), chargeSuffix: unicode[0] };
+  }
+  if (/[+-]$/.test(s) && !/\d/.test(s.charAt(s.length - 2))) {
+    return { base: s.slice(0, -1).trim(), chargeSuffix: s.slice(-1) };
+  }
+  return { base: s, chargeSuffix: "" };
 }
 
 // Parse a single species token like "2 Fe(OH)3", "MnO4^-", "CuSO4.5H2O", "Fe^3+"
-function parseSpeciesToken(token: string): Omit<ParsedSpecies, "balancedCoeff"> | null {
+function parseSpeciesToken(token: string): ParsedTokenInternal | null {
   let s = token.trim();
   if (!s) return null;
 
-  // Extract optional leading stoichiometric coefficient
   const coeffMatch = s.match(/^(\d+)\s*(.+)$/);
   let inputCoeff = 1;
-  if (coeffMatch) {
+  if (coeffMatch && coeffMatch[1] && coeffMatch[2]) {
     inputCoeff = parseInt(coeffMatch[1], 10) || 1;
     s = coeffMatch[2].trim();
   }
@@ -64,74 +87,47 @@ function parseSpeciesToken(token: string): Omit<ParsedSpecies, "balancedCoeff"> 
   // Strip state annotations like (s), (l), (g), (aq)
   s = s.replace(/\((s|l|g|aq)\)$/i, "").trim();
 
-  // Extract optional ionic charge e.g. ^2+, ^-, ^3-, ^+
-  let charge = 0;
-  const chargeMatch = s.match(/\^(\d*)([+-])$/);
-  if (chargeMatch) {
-    const mag = chargeMatch[1] ? parseInt(chargeMatch[1], 10) : 1;
-    charge = chargeMatch[2] === "+" ? mag : -mag;
-    s = s.slice(0, chargeMatch.index).trim();
-  }
-
-  // Parse elemental composition using parseChemicalFormula
-  const parsed = parseChemicalFormula(s);
-  if (!parsed.valid || parsed.composition.length === 0) {
+  const { base: displayFormula, chargeSuffix } = extractChargeSuffix(s);
+  const expandedBase = expandChemicalAbbreviations(displayFormula);
+  const solverFormula = `${expandedBase}${chargeSuffix}`;
+  const parsed = parseFormula(solverFormula);
+  if (!parsed.ok || parsed.counts.size === 0 || parsed.repeatUnit) {
     return null;
-  }
-
-  const counts: Record<string, number> = {};
-  for (const item of parsed.composition) {
-    counts[item.element] = item.count;
   }
 
   return {
     raw: token.trim(),
-    formula: s,
+    formula: displayFormula,
     inputCoeff,
-    counts,
-    charge,
-    mw: parsed.mw,
+    counts: Object.fromEntries(parsed.counts),
+    charge: parsed.charge,
+    mw: Number(parsed.mw.toFixed(2)),
+    solverFormula,
   };
 }
 
-// Exact Fraction arithmetic for Gaussian elimination
-class Frac {
-  num: number;
-  den: number;
-
-  constructor(num: number, den = 1) {
-    if (den < 0) {
-      num = -num;
-      den = -den;
+// Split a reaction side by '+' separators without splitting ionic charges like Fe^2+, Na+, H^+
+function splitReactionSide(side: string): string[] {
+  const tokens: string[] = [];
+  let start = 0;
+  for (let i = 0; i < side.length; i++) {
+    if (side.charAt(i) !== "+") continue;
+    const precededBySpace = i > 0 && /\s/.test(side.charAt(i - 1));
+    if (!precededBySpace) {
+      const before = side.slice(start, i);
+      const after = side.slice(i + 1);
+      // Charge sign if preceded by ^ or ^digits (Fe^2+, H^+)
+      if (/\^\d*$/.test(before)) continue;
+      // Charge sign if at end of species before a separator '+' or optional state tag + '+'
+      if (/^\s*(?:\((?:s|l|g|aq)\))?\s*(?:\+|$)/i.test(after)) continue;
     }
-    const g = gcd(num, den);
-    this.num = num / g;
-    this.den = den / g;
+    const piece = side.slice(start, i).trim();
+    if (piece) tokens.push(piece);
+    start = i + 1;
   }
-
-  add(other: Frac): Frac {
-    return new Frac(this.num * other.den + other.num * this.den, this.den * other.den);
-  }
-
-  sub(other: Frac): Frac {
-    return new Frac(this.num * other.den - other.num * this.den, this.den * other.den);
-  }
-
-  mul(other: Frac): Frac {
-    return new Frac(this.num * other.num, this.den * other.den);
-  }
-
-  div(other: Frac): Frac {
-    return new Frac(this.num * other.den, this.den * other.num);
-  }
-
-  neg(): Frac {
-    return new Frac(-this.num, this.den);
-  }
-
-  isZero(): boolean {
-    return this.num === 0;
-  }
+  const tail = side.slice(start).trim();
+  if (tail) tokens.push(tail);
+  return tokens;
 }
 
 export function balanceChemicalEquation(input: string): BalancedEquationResult {
@@ -154,7 +150,9 @@ export function balanceChemicalEquation(input: string): BalancedEquationResult {
   // Split by reaction arrow (->, →, <=>, ⇌, =)
   const arrowRegex = /\s*(?:<=>|<->|-->|->|→|⇌|=)\s*/;
   const sides = cleaned.split(arrowRegex);
-  if (sides.length !== 2 || !sides[0].trim() || !sides[1].trim()) {
+  const leftSide = sides[0]?.trim() ?? "";
+  const rightSide = sides[1]?.trim() ?? "";
+  if (sides.length !== 2 || !leftSide || !rightSide) {
     return {
       valid: false,
       error_en: "Equation must have reactants and products separated by '->' or '='.",
@@ -169,14 +167,8 @@ export function balanceChemicalEquation(input: string): BalancedEquationResult {
     };
   }
 
-  const leftTokens = sides[0]
-    .split(/\s*\+\s*/)
-    .map((t) => t.trim())
-    .filter(Boolean);
-  const rightTokens = sides[1]
-    .split(/\s*\+\s*/)
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const leftTokens = splitReactionSide(leftSide);
+  const rightTokens = splitReactionSide(rightSide);
 
   if (leftTokens.length === 0 || rightTokens.length === 0) {
     return {
@@ -193,7 +185,7 @@ export function balanceChemicalEquation(input: string): BalancedEquationResult {
     };
   }
 
-  const parsedReactants: Omit<ParsedSpecies, "balancedCoeff">[] = [];
+  const parsedReactants: ParsedTokenInternal[] = [];
   for (const tok of leftTokens) {
     const p = parseSpeciesToken(tok);
     if (!p) {
@@ -213,7 +205,7 @@ export function balanceChemicalEquation(input: string): BalancedEquationResult {
     parsedReactants.push(p);
   }
 
-  const parsedProducts: Omit<ParsedSpecies, "balancedCoeff">[] = [];
+  const parsedProducts: ParsedTokenInternal[] = [];
   for (const tok of rightTokens) {
     const p = parseSpeciesToken(tok);
     if (!p) {
@@ -233,7 +225,7 @@ export function balanceChemicalEquation(input: string): BalancedEquationResult {
     parsedProducts.push(p);
   }
 
-  // Verify identical element sets on both sides
+  // Verify identical element sets on both sides for crisp error messages
   const leftElements = new Set<string>();
   const rightElements = new Set<string>();
   parsedReactants.forEach((r) => Object.keys(r.counts).forEach((el) => leftElements.add(el)));
@@ -272,128 +264,20 @@ export function balanceChemicalEquation(input: string): BalancedEquationResult {
     }
   }
 
-  const elements = Array.from(leftElements);
-  const allSpecies = [...parsedReactants, ...parsedProducts];
-  const nCols = allSpecies.length;
-  const hasCharge = allSpecies.some((sp) => sp.charge !== 0);
-
-  // Build stoichiometric matrix: rows = elements (+ optional charge row), cols = species
-  // Reactants have positive entries, products have negative entries
-  const matrix: Frac[][] = elements.map((el) =>
-    allSpecies.map((sp, idx) => {
-      const sign = idx < parsedReactants.length ? 1 : -1;
-      return new Frac(sign * (sp.counts[el] || 0));
-    }),
+  // Solve stoichiometric coefficients using chem-core's exact BigInt RREF solver
+  const solved = solveCoefficients(
+    parsedReactants.map((r) => r.solverFormula),
+    parsedProducts.map((p) => p.solverFormula),
   );
 
-  if (hasCharge) {
-    matrix.push(
-      allSpecies.map((sp, idx) => {
-        const sign = idx < parsedReactants.length ? 1 : -1;
-        return new Frac(sign * sp.charge);
-      }),
-    );
-  }
-
-  const nRows = matrix.length;
-  const pivotColForRow: number[] = [];
-  const isPivotCol = new Array<boolean>(nCols).fill(false);
-
-  // Gaussian Elimination to Reduced Row Echelon Form (RREF)
-  let r = 0;
-  for (let c = 0; c < nCols && r < nRows; c++) {
-    let pivotRow = -1;
-    for (let i = r; i < nRows; i++) {
-      if (!matrix[i][c].isZero()) {
-        pivotRow = i;
-        break;
-      }
-    }
-    if (pivotRow === -1) continue;
-
-    // Swap rows
-    const tmp = matrix[r];
-    matrix[r] = matrix[pivotRow];
-    matrix[pivotRow] = tmp;
-
-    // Normalize pivot row
-    const pivotVal = matrix[r][c];
-    for (let j = c; j < nCols; j++) {
-      matrix[r][j] = matrix[r][j].div(pivotVal);
-    }
-
-    // Eliminate column c in all other rows
-    for (let i = 0; i < nRows; i++) {
-      if (i !== r && !matrix[i][c].isZero()) {
-        const factor = matrix[i][c];
-        for (let j = c; j < nCols; j++) {
-          matrix[i][j] = matrix[i][j].sub(factor.mul(matrix[r][j]));
-        }
-      }
-    }
-
-    pivotColForRow.push(c);
-    isPivotCol[c] = true;
-    r++;
-  }
-
-  // Find free variables (columns without pivots)
-  const freeCols: number[] = [];
-  for (let c = 0; c < nCols; c++) {
-    if (!isPivotCol[c]) freeCols.push(c);
-  }
-
-  if (freeCols.length === 0) {
+  if (solved.status !== "ok") {
     return {
       valid: false,
-      error_en: "No non-trivial stoichiometric solution exists for this equation.",
-      error_fa: "پاسخ استوکیومتری معتبری برای موازنه این معادله وجود ندارد.",
-      reactants: [],
-      products: [],
-      atomAudit: [],
-      totalMassPerMoleReaction: 0,
-      formattedPlain: "",
-      matrixSteps_en: [],
-      matrixSteps_fa: [],
-    };
-  }
-
-  // Construct nullspace solution vector by setting free variables to 1
-  const solFrac: Frac[] = new Array<Frac>(nCols).fill(new Frac(0));
-  for (const fc of freeCols) {
-    solFrac[fc] = new Frac(1);
-  }
-
-  for (let rowIdx = 0; rowIdx < pivotColForRow.length; rowIdx++) {
-    const pCol = pivotColForRow[rowIdx];
-    let sum = new Frac(0);
-    for (const fc of freeCols) {
-      sum = sum.add(matrix[rowIdx][fc].mul(solFrac[fc]));
-    }
-    solFrac[pCol] = sum.neg();
-  }
-
-  // Convert rational vector to smallest positive integers via LCM of denominators
-  let commonDen = 1;
-  for (const f of solFrac) {
-    commonDen = lcm(commonDen, f.den);
-  }
-
-  let coeffs = solFrac.map((f) => Math.round((f.num * commonDen) / f.den));
-
-  // If all negative, flip signs
-  if (coeffs.every((v) => v < 0)) {
-    coeffs = coeffs.map((v) => -v);
-  }
-
-  // Verify all coefficients are strictly positive
-  if (coeffs.some((v) => v <= 0)) {
-    return {
-      valid: false,
-      error_en:
-        "Could not find strictly positive stoichiometric coefficients. Verify all reactants and products are on the correct side.",
+      error_en: solved.message,
       error_fa:
-        "ضرایب استوکیومتری مثبت برای تمام گونه‌ها یافت نشد. لطفاً صحت فرمول واکنش‌دهنده‌ها و فرآورده‌ها را بررسی کنید.",
+        solved.status === "underdetermined"
+          ? "بیش از یک واکنش مستقل با این گونه‌ها سازگار است؛ ضرایب یکتا نیستند."
+          : "پاسخ استوکیومتری معتبری با ضرایب مثبت برای موازنه این معادله وجود ندارد.",
       reactants: [],
       products: [],
       atomAudit: [],
@@ -404,21 +288,24 @@ export function balanceChemicalEquation(input: string): BalancedEquationResult {
     };
   }
 
-  // Reduce by overall GCD
-  const firstVal = coeffs[0] ?? 1;
-  const overallGcd = coeffs.reduce((acc, v) => gcd(acc, v), firstVal);
-  coeffs = coeffs.map((v) => v / overallGcd);
+  const toPublicSpecies = (sp: ParsedTokenInternal, balancedCoeff: number): ParsedSpecies => ({
+    raw: sp.raw,
+    formula: sp.formula,
+    inputCoeff: sp.inputCoeff,
+    balancedCoeff,
+    counts: sp.counts,
+    charge: sp.charge,
+    mw: sp.mw,
+  });
 
-  const balancedReactants: ParsedSpecies[] = parsedReactants.map((sp, i) => ({
-    ...sp,
-    balancedCoeff: coeffs[i] ?? 1,
-  }));
-  const balancedProducts: ParsedSpecies[] = parsedProducts.map((sp, i) => ({
-    ...sp,
-    balancedCoeff: coeffs[parsedReactants.length + i] ?? 1,
-  }));
+  const balancedReactants = parsedReactants.map((sp, i) =>
+    toPublicSpecies(sp, solved.reactantCoefficients[i] ?? 1),
+  );
+  const balancedProducts = parsedProducts.map((sp, i) =>
+    toPublicSpecies(sp, solved.productCoefficients[i] ?? 1),
+  );
 
-  // Atom conservation audit table
+  const elements = Array.from(leftElements);
   const atomAudit: AtomAuditRow[] = elements.map((el) => {
     const unbalancedLeft = balancedReactants.reduce(
       (sum, sp) => sum + sp.inputCoeff * (sp.counts[el] || 0),
@@ -445,7 +332,11 @@ export function balanceChemicalEquation(input: string): BalancedEquationResult {
     };
   });
 
-  const wasAlreadyBalanced = atomAudit.every((row) => row.unbalancedLeft === row.unbalancedRight);
+  const leftChargeUnbal = balancedReactants.reduce((s, sp) => s + sp.inputCoeff * sp.charge, 0);
+  const rightChargeUnbal = balancedProducts.reduce((s, sp) => s + sp.inputCoeff * sp.charge, 0);
+  const wasAlreadyBalanced =
+    leftChargeUnbal === rightChargeUnbal &&
+    atomAudit.every((row) => row.unbalancedLeft === row.unbalancedRight);
 
   const totalMassPerMoleReaction = balancedReactants.reduce(
     (sum, sp) => sum + sp.balancedCoeff * sp.mw,
@@ -464,17 +355,20 @@ export function balanceChemicalEquation(input: string): BalancedEquationResult {
       .join(" + ");
 
   const formattedPlain = `${formatSide(balancedReactants)} → ${formatSide(balancedProducts)}`;
+  const nCols = balancedReactants.length + balancedProducts.length;
+  const hasCharge = [...balancedReactants, ...balancedProducts].some((sp) => sp.charge !== 0);
+  const nRows = elements.length + (hasCharge ? 1 : 0);
 
   const matrixSteps_en = [
     `1. Identified ${elements.length} unique elements (${elements.join(", ")}) across ${nCols} chemical species.`,
-    `2. Constructed a ${nRows} × ${nCols} atom-conservation matrix A·x = 0 and computed exact Reduced Row Echelon Form (RREF).`,
-    `3. Scaled rational nullspace basis vector by LCM(${commonDen}) and divided by GCD(${overallGcd}) to obtain minimal integer stoichiometric coefficients.`,
+    `2. Constructed a ${nRows} × ${nCols} atom${hasCharge ? "/charge" : ""}-conservation matrix A·x = 0 and computed exact rational RREF via chem-core.`,
+    `3. Reduced the unique nullspace basis vector to minimal positive integer stoichiometric coefficients.`,
   ];
 
   const matrixSteps_fa = [
     `۱. شناسایی ${elements.length} عنصر مجزا (${elements.join("، ")}) در ${nCols} گونه شیمیایی واکنش.`,
-    `۲. تشکیل ماتریس پایستگی اتم‌ها به ابعاد ${nRows}×${nCols} (A·x = 0) و اجرای حذف گاوسی-جردن در میدان اعداد گویا.`,
-    `۳. ضرب بردار پایه فضای پوچ در ک.م.م مخرج‌ها (${commonDen}) و ساده‌سازی با ب.م.م (${overallGcd}) برای استخراج کوچک‌ترین ضرایب صحیح استوکیومتری.`,
+    `۲. تشکیل ماتریس پایستگی اتم${hasCharge ? " و بار" : ""} به ابعاد ${nRows}×${nCols} (A·x = 0) و حل دقیق در میدان اعداد گویا.`,
+    `۳. ساده‌سازی بردار پایه فضای پوچ به کوچک‌ترین ضرایب صحیح مثبت استوکیومتری.`,
   ];
 
   return {

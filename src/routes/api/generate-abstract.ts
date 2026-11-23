@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import { createFileRoute } from "@tanstack/react-router";
 import { buildAbstractPrompt, buildStructuredSceneDescription } from "@/lib/abstract-prompt";
 import type { JournalId, ColorSchemeId } from "@/lib/journal-standards";
@@ -23,28 +22,6 @@ export const Route = createFileRoute("/api/generate-abstract")({
           journal?: JournalId;
           colorScheme?: ColorSchemeId;
         };
-
-        if (text) {
-          try {
-            fs.writeFileSync(
-              "/tmp/recent-inputs.log",
-              `[${new Date().toISOString()}] (len: ${text.length})\n${text}\n----------------------------------------\n`,
-              { flag: "a" },
-            );
-            fs.writeFileSync(
-              "./user-inputs.log",
-              `\n[GENERATE ${new Date().toISOString()}] (len: ${text.length})\n${text}\n`,
-              { flag: "a" },
-            );
-            fs.writeFileSync(
-              "/tmp/user-input.log",
-              `\n[GENERATE ${new Date().toISOString()}] (len: ${text.length})\n${text}\n`,
-              { flag: "a" },
-            );
-          } catch {
-            /* ignore */
-          }
-        }
 
         if (!text || text.trim().length < 3) {
           return new Response(JSON.stringify({ error: "text_too_short" }), {

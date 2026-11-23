@@ -17,16 +17,12 @@ function getGeminiApiKey(): string | undefined {
   if (envKey && envKey !== "MY_GEMINI_API_KEY" && envKey.trim().length > 10) {
     return envKey.trim();
   }
-  const viteKey = process.env["VITE_GEMINI_API_KEY"];
-  if (viteKey && viteKey !== "MY_GEMINI_API_KEY" && viteKey.trim().length > 10) {
-    return viteKey.trim();
-  }
   try {
     for (const p of [".env", ".env.local"]) {
       if (fs.existsSync(p)) {
         const content = fs.readFileSync(p, "utf-8");
         for (const line of content.split("\n")) {
-          const match = line.match(/^(?:VITE_)?GEMINI_API_KEY=(.+)$/);
+          const match = line.match(/^GEMINI_API_KEY=(.+)$/);
           if (match && match[1] && match[1].trim() !== "MY_GEMINI_API_KEY") {
             return match[1].trim();
           }
@@ -81,7 +77,7 @@ CRITICAL AESTHETIC & GRAPHICAL CONSTRAINTS (NO EXCEPTIONS):
       console.log(`[universal-generative-engine] Synthesizing custom visual scene via ${model}...`);
       const response = await ai.models.generateContent({
         model,
-        contents: `USER PROMPT:\n"${prompt}"\n\nTARGET JOURNAL: ${standard.fullName} (${standard.aspectRatio})\nCOLOR PALETTE: ${colorScheme.name} (${colorScheme.promptModifier})\n\nSynthesize the complete, seamless, borderless 1280x720 SVG now:`,
+        contents: `USER PROMPT:\n"${prompt}"\n\nTARGET JOURNAL: ${standard.fullName} (${standard.aspectRatio})\nCOLOR PALETTE: ${colorScheme.nameEn} (${colorScheme.promptModifier})\n\nSynthesize the complete, seamless, borderless 1280x720 SVG now:`,
         config: {
           systemInstruction,
           temperature: 0.25,

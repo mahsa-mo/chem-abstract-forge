@@ -5,7 +5,7 @@ import { BUFFER_SYSTEMS, LAB_SOLVENTS } from "@/data/lab-reference-data";
 import { toast } from "sonner";
 
 export function BufferAndPhLab({ isRtl }: { isRtl: boolean }) {
-  const [selectedBufferId, setSelectedBufferId] = useState<string>(BUFFER_SYSTEMS[0].id);
+  const [selectedBufferId, setSelectedBufferId] = useState<string>(BUFFER_SYSTEMS[0]!.id);
   const [targetPh, setTargetPh] = useState<number>(7.4);
   const [bufferConcMm, setBufferConcMm] = useState<number>(100); // mM
   const [bufferVolMl, setBufferVolMl] = useState<number>(500); // mL
@@ -18,7 +18,7 @@ export function BufferAndPhLab({ isRtl }: { isRtl: boolean }) {
   const [compoundType, setCompoundType] = useState<"acid" | "base">("acid");
 
   const activeBuffer = useMemo(
-    () => BUFFER_SYSTEMS.find((b) => b.id === selectedBufferId) || BUFFER_SYSTEMS[0],
+    () => BUFFER_SYSTEMS.find((b) => b.id === selectedBufferId) || BUFFER_SYSTEMS[0]!,
     [selectedBufferId],
   );
 
@@ -430,7 +430,7 @@ export function VacuumAndGreenChemLab({ isRtl }: { isRtl: boolean }) {
   const [productMassG, setProductMassG] = useState<number>(2.8);
 
   const activeSolvent = useMemo(
-    () => LAB_SOLVENTS.find((s) => s.id === solventId) || LAB_SOLVENTS[0],
+    () => LAB_SOLVENTS.find((s) => s.id === solventId) || LAB_SOLVENTS[0]!,
     [solventId],
   );
 
@@ -459,8 +459,8 @@ export function VacuumAndGreenChemLab({ isRtl }: { isRtl: boolean }) {
   }, [activeSolvent, vacuumMbar]);
 
   const pairComparison = useMemo(() => {
-    const sA = LAB_SOLVENTS.find((s) => s.id === solventAId) || LAB_SOLVENTS[0];
-    const sB = LAB_SOLVENTS.find((s) => s.id === solventBId) || LAB_SOLVENTS[11];
+    const sA = LAB_SOLVENTS.find((s) => s.id === solventAId) || LAB_SOLVENTS[0]!;
+    const sB = LAB_SOLVENTS.find((s) => s.id === solventBId) || LAB_SOLVENTS[11]!;
     const isImmiscible =
       sA.id !== sB.id && (sA.immiscibleWith.includes(sB.id) || sB.immiscibleWith.includes(sA.id));
 
